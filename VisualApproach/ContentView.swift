@@ -84,7 +84,7 @@ struct ContentView: View {
                                 .frame(width: 40)
                                 .offset(y: geometry.size.height * -0.16666)
 
-                            // Glide path2
+                            // Glide path
                             Rectangle()
                                 .stroke(Color.black, lineWidth: 2)
                                 .background(Color(red: 1, green: 0, blue: 1))
@@ -99,6 +99,12 @@ struct ContentView: View {
                                     .linear(duration: 1),
                                     value: genericLocation.gsOffset
                                 )
+
+                            // Descent angle
+                            Text("\(airportSelection.descentAngle, specifier: "%.1f")")
+                                .offset(x: 100)
+                                .foregroundColor(Color(red: 0.6, green: 0.6, blue: 0.6))
+
                         }
                     }
                 } else {
