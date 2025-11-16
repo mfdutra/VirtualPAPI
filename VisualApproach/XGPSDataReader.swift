@@ -31,22 +31,24 @@ class XGPSDataReader: ObservableObject {
         udpListener = try? NWListener(using: parameters, on: port)
         
         udpListener?.newConnectionHandler = { [weak self] connection in
+            guard let self else { return }
             Task { @MainActor in
-                self?.udpConnection = connection
+                self.udpConnection = connection
+                self.setupConnection(connection)
             }
-            self?.setupConnection(connection)
         }
         
         udpListener?.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
             Task { @MainActor in
                 switch state {
                 case .ready:
-                    self?.isConnected = true
+                    self.isConnected = true
                 case .failed(let error):
                     print("UDP listener failed: \(error)")
-                    self?.isConnected = false
+                    self.isConnected = false
                 case .cancelled:
-                    self?.isConnected = false
+                    self.isConnected = false
                 default:
                     break
                 }
@@ -56,12 +58,13 @@ class XGPSDataReader: ObservableObject {
         udpListener?.start(queue: queue)
     }
     
-    private nonisolated func setupConnection(_ connection: NWConnection) {
+    private func setupConnection(_ connection: NWConnection) {
         connection.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
             Task { @MainActor in
                 switch state {
                 case .ready:
-                    self?.receiveData(from: connection)
+                    self.receiveData(from: connection)
                 case .failed(let error):
                     print("UDP connection failed: \(error)")
                 case .cancelled:
@@ -82,16 +85,20 @@ class XGPSDataReader: ObservableObject {
         udpConnection = nil
     }
     
-    private nonisolated func receiveData(from connection: NWConnection) {
+    private func receiveData(from connection: NWConnection) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, context, isComplete, error in
+            guard let self else { return }
+            
             if let data = data, !data.isEmpty {
                 Task { @MainActor in
-                    self?.processXGPSData(data)
+                    self.processXGPSData(data)
                 }
             }
             
             if error == nil {
-                self?.receiveData(from: connection)
+                Task { @MainActor in
+                    self.receiveData(from: connection)
+                }
             }
         }
     }
@@ -109,16 +116,14 @@ class XGPSDataReader: ObservableObject {
         let latitude = Double(components?[2] ?? "") ?? 0
         let altitude = (Double(components?[3] ?? "") ?? 0) * 3.2808399 // meter to feet
         
-        Task { @MainActor in
-            self.latitude = latitude
-            self.longitude = longitude
-            self.altitude = altitude
-            self.lastUpdateTime = Date()
-            
-            // Update GenericLocation if available
-            self.genericLocation?.latitude = latitude
-            self.genericLocation?.longitude = longitude
-            self.genericLocation?.altitude = altitude
-        }
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+        self.lastUpdateTime = Date()
+        
+        // Update GenericLocation if available
+        self.genericLocation?.latitude = latitude
+        self.genericLocation?.longitude = longitude
+        self.genericLocation?.altitude = altitude
     }
 }
