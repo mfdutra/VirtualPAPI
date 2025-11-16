@@ -12,7 +12,8 @@ class AirportSelection: ObservableObject {
     @Published var selectedAirport: Airport?
     @Published var selectedRunway: Runway?
     @Published var descentAngle: Double = 3.0
-    
+    @Published var targetElevation: Double?
+
     func setAirport(_ airport: Airport) {
         self.selectedAirport = airport
         // Clear runway selection when airport changes
