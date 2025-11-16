@@ -147,7 +147,6 @@ struct AirportSelectionView: View {
                         List(availableRunways, id: \.ident) { runway in
                             Button(action: {
                                 selectRunway(runway)
-                                dismiss()
                             }) {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
@@ -173,6 +172,45 @@ struct AirportSelectionView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        
+                        // Descent Angle Selection (shown when runway is selected)
+                        if airportSelection.selectedRunway != nil {
+                            Section {
+                                VStack(alignment: .leading, spacing: 15) {
+                                    Text("Descent Angle")
+                                        .font(.headline)
+                                    
+                                    HStack {
+                                        Text("\(airportSelection.descentAngle, specifier: "%.1f")°")
+                                            .font(.title2)
+                                            .bold()
+                                            .frame(width: 60, alignment: .leading)
+                                        
+                                        Slider(
+                                            value: $airportSelection.descentAngle,
+                                            in: 2.0...7.0,
+                                            step: 0.1
+                                        )
+                                        .tint(.blue)
+                                    }
+                                    
+                                    HStack {
+                                        Text("2°")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                        Text("Standard: 3°")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                        Text("7°")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding()
+                            }
+                        }
                     }
                 }
             }
@@ -181,7 +219,7 @@ struct AirportSelectionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
+                Button("Load") {
                     dismiss()
                 }
                 .disabled(airportSelection.selectedRunway == nil)
