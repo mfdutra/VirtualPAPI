@@ -103,8 +103,11 @@ class DatabaseManager {
                 let width = sqlite3_column_double(statement, 2)
                 let latitude = sqlite3_column_double(statement, 3)
                 let longitude = sqlite3_column_double(statement, 4)
-                let elevation = sqlite3_column_double(statement, 5)
-                let heading = sqlite3_column_double(statement, 6)
+                
+                // Handle nullable columns
+                let elevation: Double? = sqlite3_column_type(statement, 5) == SQLITE_NULL ? nil : sqlite3_column_double(statement, 5)
+                let heading: Double? = sqlite3_column_type(statement, 6) == SQLITE_NULL ? nil : sqlite3_column_double(statement, 6)
+                
                 let displacedThreshold = sqlite3_column_double(statement, 7)
                 
                 let runway = Runway(

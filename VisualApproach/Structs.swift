@@ -20,7 +20,7 @@ struct Runway {
     let width_ft: Double
     let latitude_deg: Double
     let longitude_deg: Double
-    let elevation_ft: Double
-    let heading_degT: Double
+    let elevation_ft: Double?
+    let heading_degT: Double?
     let displaced_threshold_ft: Double
 }
