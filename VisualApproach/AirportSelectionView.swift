@@ -11,10 +11,11 @@ struct AirportSelectionView: View {
     @EnvironmentObject var airportSelection: AirportSelection
     @Environment(\.dismiss) private var dismiss
     
-    @State private var searchText = ""
+    @SceneStorage("airportSelectionSearchText") private var searchText = ""
     @State private var searchResults: [Airport] = []
     @State private var availableRunways: [Runway] = []
     @State private var isSearching = false
+    @State private var hasRestoredState = false
     
     private let databaseManager = DatabaseManager()
     
@@ -186,6 +187,9 @@ struct AirportSelectionView: View {
                 .disabled(airportSelection.selectedRunway == nil)
             }
         }
+        .onAppear {
+            restoreStateIfNeeded()
+        }
     }
     
     private func performSearch(query: String) {
@@ -219,6 +223,22 @@ struct AirportSelectionView: View {
     
     private func selectRunway(_ runway: Runway) {
         airportSelection.setRunway(runway)
+    }
+    
+    private func restoreStateIfNeeded() {
+        guard !hasRestoredState else { return }
+        hasRestoredState = true
+        
+        // If there's a selected airport but no runways loaded, restore the runway list
+        if let airport = airportSelection.selectedAirport, availableRunways.isEmpty {
+            let runways = databaseManager.getRunways(forAirport: airport.ident)
+            availableRunways = runways
+        }
+        
+        // If there's persisted search text, perform the search
+        if !searchText.isEmpty && searchResults.isEmpty && airportSelection.selectedAirport == nil {
+            performSearch(query: searchText)
+        }
     }
 }
 
