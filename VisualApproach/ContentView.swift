@@ -15,28 +15,36 @@ struct ContentView: View {
     @EnvironmentObject var genericLocation: GenericLocation
     @EnvironmentObject var appSettings: AppSettings
     @EnvironmentObject var xgpsDataReader: XGPSDataReader
+    @EnvironmentObject var airportSelection: AirportSelection
 
     var body: some View {
             NavigationStack {
                 VStack(spacing: 5) {
                     
                     // Data bar
-//                    if let selectedAirport = $airportSelection.selectedAirport {
-//                        HStack {
-//                            Text("DST")
-//                            Text(selectedAirport.icaoCode)
-//                                .foregroundColor(Color(red: 1, green: 0, blue: 1))
-//                                .bold()
-//                            Text("DTG")
-//                            Text("\(genericLocation.distanceToDestination, specifier: "%.1f")")
-//                                .foregroundColor(Color(red: 1, green: 0, blue: 1))
-//                                .bold()
-//                            Text("ANG")
-//                            Text("\(genericLocation.angleToDestination, specifier: "%.1f")")
-//                                .foregroundColor(Color(red: 1, green: 0, blue: 1))
-//                                .bold()
-//                        }
-//                    }
+                    if let selectedAirport = airportSelection.selectedAirport {
+                        HStack {
+                            Text("DST")
+                            Text(selectedAirport.ident)
+                                .foregroundColor(Color(red: 1, green: 0, blue: 1))
+                                .bold()
+                            if let runway = airportSelection.selectedRunway {
+                                Text("RWY")
+                                Text(runway.ident)
+                                    .foregroundColor(Color(red: 1, green: 0, blue: 1))
+                                    .bold()
+                            }
+                            Text("DTG")
+                            Text("\(genericLocation.distanceToDestination, specifier: "%.1f")")
+                                .foregroundColor(Color(red: 1, green: 0, blue: 1))
+                                .bold()
+                            Text("ANG")
+                            Text("\(genericLocation.angleToDestination, specifier: "%.1f")")
+                                .foregroundColor(Color(red: 1, green: 0, blue: 1))
+                                .bold()
+                        }
+                        .padding(.vertical, 8)
+                    }
                     
                     GeometryReader { geometry in
                         ZStack {
@@ -113,8 +121,8 @@ struct ContentView: View {
     //                .padding(.horizontal)
                     
                     HStack {
-//                        NavigationLink("Destination", destination: AirportSearchView())
-//                            .padding()
+                        NavigationLink("Destination", destination: AirportSelectionView())
+                            .padding()
                         Spacer()
                         NavigationLink("Settings", destination: SettingsView())
                             .padding()
