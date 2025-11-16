@@ -114,6 +114,13 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                         Text("Load a destination below")
                             .foregroundColor(.secondary)
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 60))
+                            .foregroundColor(.red)
+                            .padding(.top, 30)
+                        Text("USE IN VISUAL CONDITIONS ONLY")
+                            .foregroundColor(.red)
+                            .bold()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
