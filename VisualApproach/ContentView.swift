@@ -12,7 +12,6 @@ internal import _LocationEssentials
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @State var gs_deviation: Double = 0
-    @StateObject private var locationTracker = HighFrequencyLocationTracker()
     @EnvironmentObject var genericLocation: GenericLocation
     @EnvironmentObject var appSettings: AppSettings
     @EnvironmentObject var xgpsDataReader: XGPSDataReader
@@ -129,40 +128,6 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-
-                VStack {
-                    Text("Location Tracker")
-                        .font(.headline)
-
-                    if let location = locationTracker.currentLocation {
-                        Text("Lat: \(location.latitude, specifier: "%.6f")")
-                        Text("Lon: \(location.longitude, specifier: "%.6f")")
-                        if let elevation = locationTracker.elevation {
-                            Text("Alt: \(elevation, specifier: "%.1f") m")
-                        }
-                        Text(
-                            "Accuracy: \(locationTracker.accuracy, specifier: "%.1f") m"
-                        )
-
-                        Button(locationTracker.isTracking ? "Stop" : "Start") {
-                            if locationTracker.isTracking {
-                                locationTracker.stopTracking()
-                            } else {
-                                locationTracker.startTracking()
-                            }
-                        }
-                    } else {
-                        Text("No location data")
-                        Button("Start Tracking") {
-                            locationTracker.startTracking()
-                        }
-                    }
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(10)
-                .shadow(radius: 2)
-                .padding(.horizontal)
 
                 HStack {
                     NavigationLink(

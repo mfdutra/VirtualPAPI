@@ -15,6 +15,7 @@ class XGPSDataReader: ObservableObject {
     private let queue = DispatchQueue(label: "xgps-udp-queue")
 
     var genericLocation: GenericLocation?
+    var appSettings: AppSettings?
 
     deinit {
         udpListener?.cancel()
@@ -104,6 +105,14 @@ class XGPSDataReader: ObservableObject {
         }
     }
 
+    fileprivate func updateGenericLocation(_ latitude: Double, _ longitude: Double, _ altitude: Double) {
+        if appSettings!.useXPlane {
+            self.genericLocation?.latitude = latitude
+            self.genericLocation?.longitude = longitude
+            self.genericLocation?.altitude = altitude
+        }
+    }
+    
     private func processXGPSData(_ data: Data) {
         guard data.count >= 41 else { return }
 
@@ -122,9 +131,6 @@ class XGPSDataReader: ObservableObject {
         self.altitude = altitude
         self.lastUpdateTime = Date()
 
-        // Update GenericLocation if available
-        self.genericLocation?.latitude = latitude
-        self.genericLocation?.longitude = longitude
-        self.genericLocation?.altitude = altitude
+        updateGenericLocation(latitude, longitude, altitude)
     }
 }

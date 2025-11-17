@@ -19,6 +19,9 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
     @Published var isTracking = false
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
+    var appSettings: AppSettings?
+    var genericLocation: GenericLocation?
+
     private let updateFrequency: TimeInterval = 0.1  // 10 times per second
 
     override init() {
@@ -86,6 +89,18 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
             self.currentLocation = location.coordinate
             self.accuracy = location.horizontalAccuracy
             self.elevation = location.altitude
+
+            // Only update genericLocation if not using X-Plane
+            if let appSettings = self.appSettings,
+                !appSettings.useXPlane,
+                let genericLocation = self.genericLocation,
+                let currentLocation = self.currentLocation,
+                let elevation = self.elevation
+            {
+                genericLocation.latitude = currentLocation.latitude
+                genericLocation.longitude = currentLocation.longitude
+                genericLocation.altitude = elevation * 3.2808399  // meter to feet
+            }
         }
     }
 
