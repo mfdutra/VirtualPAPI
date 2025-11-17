@@ -45,7 +45,7 @@ class DatabaseManager {
         let queryString = """
             SELECT ident, name, latitude_deg, longitude_deg, elevation_ft
             FROM airports
-            WHERE ident LIKE ? OR name LIKE ?
+            WHERE ident LIKE ?
             ORDER BY ident
             LIMIT 100
         """
@@ -53,7 +53,7 @@ class DatabaseManager {
         var statement: OpaquePointer?
         
         if sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK {
-            let searchPattern = "%\(query)%"
+            let searchPattern = "\(query)%"
             sqlite3_bind_text(statement, 1, (searchPattern as NSString).utf8String, -1, nil)
             sqlite3_bind_text(statement, 2, (searchPattern as NSString).utf8String, -1, nil)
             

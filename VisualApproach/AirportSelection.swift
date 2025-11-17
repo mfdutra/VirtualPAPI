@@ -15,6 +15,7 @@ class AirportSelection: ObservableObject {
     @Published var targetElevation: Double?
     @Published var targetLatitude: Double?
     @Published var targetLongitude: Double?
+    @Published var aimingPoint: Double = 500
 
     func setAirport(_ airport: Airport) {
         self.selectedAirport = airport
@@ -24,8 +25,8 @@ class AirportSelection: ObservableObject {
         self.descentAngle = 3.0
     }
 
-    func setRunway(_ runway: Runway) {
-        self.selectedRunway = runway
+    func setTargets() {
+        let runway = self.selectedRunway!
 
         // Some runways don't have elevation information
         // Default to the airport elevation
@@ -35,12 +36,18 @@ class AirportSelection: ObservableObject {
             self.targetElevation = self.selectedAirport?.elevation_ft
         }
 
-        // Move the target according to displacement threshold
+        // Move the target according to displacement threshold and selected aiming point
         (self.targetLatitude, self.targetLongitude) =
-            calculateDisplacedThreshold(for: runway)
+            calculateAimingPoint()
     }
 
-    func setDescentAngle(_ angle: Double) {
+    func setRunway(_ runway: Runway) {
+        self.selectedRunway = runway
+
+        setTargets()
+    }
+
+    func setDescentAngle(angle: Double) {
         self.descentAngle = angle
     }
 
@@ -51,16 +58,19 @@ class AirportSelection: ObservableObject {
         self.targetElevation = nil
         self.targetLatitude = nil
         self.targetLongitude = nil
+        self.aimingPoint = 500
     }
 
-    /// Calculates the location of the displaced threshold for a runway
-    /// - Parameter runway: The runway with displacement information
-    /// - Returns: A tuple containing the latitude and longitude of the displaced threshold, or nil if heading is not available
-    func calculateDisplacedThreshold(for runway: Runway) -> (
+    /// Calculates the final aiming point, considering the desired aiming
+    /// point plus the displaced threshold of the runway
+    /// - Returns: A tuple containing the latitude and longitude of the aiming point
+    func calculateAimingPoint() -> (
         latitude: Double, longitude: Double
     ) {
-        // If there's no displacement, return the runway's original coordinates
-        guard runway.displaced_threshold_ft > 0 else {
+        let runway = self.selectedRunway!
+
+        // If there's nothing to calculate, return the runway's original coordinates
+        guard runway.displaced_threshold_ft > 0 || self.aimingPoint > 0 else {
             return (runway.latitude_deg, runway.longitude_deg)
         }
 
@@ -70,7 +80,9 @@ class AirportSelection: ObservableObject {
         }
 
         // Convert distance from feet to meters
-        let distanceMeters = runway.displaced_threshold_ft * 0.3048
+        let distanceMeters =
+            (runway.displaced_threshold_ft
+                + self.aimingPoint) * 0.3048
 
         // Earth's radius in meters
         let earthRadius = 6371000.0

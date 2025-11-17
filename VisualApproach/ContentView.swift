@@ -101,9 +101,13 @@ struct ContentView: View {
                                 )
 
                             // Descent angle
-                            Text("\(airportSelection.descentAngle, specifier: "%.1f")")
-                                .offset(x: 100)
-                                .foregroundColor(Color(red: 0.6, green: 0.6, blue: 0.6))
+                            Text(
+                                "GP: \(airportSelection.descentAngle, specifier: "%.1f")°\nTDZE: \(airportSelection.targetElevation ?? 0, specifier: "%.0f")"
+                            )
+                            .offset(x: 130)
+                            .foregroundColor(
+                                Color(red: 0.6, green: 0.6, blue: 0.6)
+                            )
 
                         }
                     }

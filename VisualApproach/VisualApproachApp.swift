@@ -5,29 +5,16 @@
 //  Created by Marlon Dutra on 11/15/25.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct VisualApproachApp: App {
-//    var sharedModelContainer: ModelContainer = {
-//        let schema = Schema([
-//            Item.self,
-//        ])
-//        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-//
-//        do {
-//            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-//        } catch {
-//            fatalError("Could not create ModelContainer: \(error)")
-//        }
-//    }()
-
     @StateObject private var appSettings = AppSettings()
     @StateObject private var genericLocation = GenericLocation()
     @StateObject private var xgpsDataReader = XGPSDataReader()
     @StateObject private var airportSelection = AirportSelection()
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -35,9 +22,10 @@ struct VisualApproachApp: App {
                 .environmentObject(genericLocation)
                 .environmentObject(xgpsDataReader)
                 .environmentObject(airportSelection)
+                .onAppear {
+                    xgpsDataReader.genericLocation = genericLocation
+                    genericLocation.airportSelection = airportSelection
+                }
         }
-//                .onAppear {
-//            xgpsDataReader.genericLocation = genericLocation
-//        }
     }
 }

@@ -16,6 +16,7 @@ struct AirportSelectionView: View {
     @State private var availableRunways: [Runway] = []
     @State private var isSearching = false
     @State private var hasRestoredState = false
+    @FocusState private var isSearchFieldFocused: Bool
 
     private let databaseManager = DatabaseManager()
 
@@ -32,13 +33,17 @@ struct AirportSelectionView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
 
-                    TextField("Search by ICAO or name", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .autocapitalization(.allCharacters)
-                        .disableAutocorrection(true)
-                        .onChange(of: searchText) { _, newValue in
-                            performSearch(query: newValue)
-                        }
+                    TextField(
+                        "Airport identifier (e.g. KJFK)",
+                        text: $searchText
+                    )
+                    .textFieldStyle(.plain)
+                    .autocapitalization(.allCharacters)
+                    .disableAutocorrection(true)
+                    .focused($isSearchFieldFocused)
+                    .onChange(of: searchText) { _, newValue in
+                        performSearch(query: newValue)
+                    }
 
                     if !searchText.isEmpty {
                         Button(action: {
@@ -207,21 +212,46 @@ struct AirportSelectionView: View {
                                         .tint(.blue)
                                     }
 
+                                    Text(
+                                        "Aiming point (in feet beyond threshold)"
+                                    )
+                                    .font(.headline)
+
                                     HStack {
-                                        Text("2°")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
+                                        Text(
+                                            "\(airportSelection.aimingPoint, specifier: "%.0f")"
+                                        )
+                                        .font(.title2)
+                                        .bold()
+                                        .frame(width: 60, alignment: .leading)
+
+                                        Slider(
+                                            value: $airportSelection
+                                                .aimingPoint,
+                                            in: 0...1200,
+                                            step: 100,
+                                        )
+                                        .tint(.blue)
+                                        .onChange(
+                                            of: airportSelection.aimingPoint
+                                        ) { _, _ in
+                                            airportSelection.setTargets()
+                                        }
+                                    }
+
+                                    HStack {
                                         Spacer()
-                                        Text("Standard: 3°")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
+                                        Button("LOAD") {
+                                            dismiss()
+                                        }
+                                        .bold()
+                                        .padding()
+                                        .background(Color(.systemGray6))
                                         Spacer()
-                                        Text("7°")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
                                     }
                                 }
                                 .padding()
+                                .padding(.bottom, 20)
                             }
                         }
                     }
@@ -266,6 +296,7 @@ struct AirportSelectionView: View {
         airportSelection.setAirport(airport)
         searchText = ""
         searchResults = []
+        isSearchFieldFocused = false  // Dismiss keyboard
 
         // Load runways for selected airport
         let runways = databaseManager.getRunways(forAirport: airport.ident)
