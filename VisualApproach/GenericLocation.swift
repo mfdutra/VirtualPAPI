@@ -68,10 +68,13 @@ class GenericLocation: ObservableObject {
     private func updateGSOffset() {
         let diff = self.angleToDestination - airportSelection!.descentAngle
 
-        // 1-dot deviation in GS is 0.15 degrees
-        // Multiply by 1.11... to match the position of the dot on screen
-        var deviation = diff * 1.11111111106666666666
+        // Full scale deviation is 0.7 degrees
+        // The GP indicator can only go up or down 45% of the screen
+        // Divide the actual difference by 1.55 to move the
+        // GP indicator in the correct proportion
+        var deviation = diff / 1.55555555555555555555
 
+        // Peg GP to top or bottom on the limits
         if deviation > 0.45 {
             deviation = 0.45
         } else if deviation < -0.45 {
@@ -90,7 +93,7 @@ class GenericLocation: ObservableObject {
         )
     }
 
-    /// Calculate the distance between two points on Earth, using WGS84 data
+    /// Calculate the distance between two points on Earth, using WGS84 Earth model
     /// - Returns: distance in nautical miles
     func distance(
         from lat1: Double,
