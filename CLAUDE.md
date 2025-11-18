@@ -4,32 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VisualApproach is an iOS SwiftUI application for aviation navigation, specifically designed to provide visual approach guidance. The app displays a glide slope indicator (similar to a PAPI/VASI) and can receive location data from either the device's GPS or X-Plane flight simulator via UDP.
+VirtualPAPI is an iOS SwiftUI application for aviation navigation, specifically designed to provide visual approach guidance. The app displays a glide slope indicator (similar to a PAPI/VASI) and can receive location data from either the device's GPS or X-Plane flight simulator via UDP.
 
 ## Build & Development Commands
 
 ### Building the Project
 ```bash
 # Build for iOS simulator
-xcodebuild -scheme VisualApproach -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -scheme VirtualPAPI -destination 'platform=iOS Simulator,name=iPhone 16' build
 
 # Build for device (requires proper code signing)
-xcodebuild -scheme VisualApproach -destination 'generic/platform=iOS' build
+xcodebuild -scheme VirtualPAPI -destination 'generic/platform=iOS' build
 
 # Clean build artifacts
-xcodebuild -scheme VisualApproach clean
+xcodebuild -scheme VirtualPAPI clean
 ```
 
 ### Running Tests
 ```bash
 # Run unit tests
-xcodebuild test -scheme VisualApproach -destination 'platform=iOS Simulator,name=iPhone 16'
+xcodebuild test -scheme VirtualPAPI -destination 'platform=iOS Simulator,name=iPhone 16'
 
 # Run specific test target
-xcodebuild test -scheme VisualApproach -only-testing:VisualApproachTests -destination 'platform=iOS Simulator,name=iPhone 16'
+xcodebuild test -scheme VirtualPAPI -only-testing:VirtualPAPITests -destination 'platform=iOS Simulator,name=iPhone 16'
 
 # Run UI tests
-xcodebuild test -scheme VisualApproach -only-testing:VisualApproachUITests -destination 'platform=iOS Simulator,name=iPhone 16'
+xcodebuild test -scheme VirtualPAPI -only-testing:VirtualPAPIUITests -destination 'platform=iOS Simulator,name=iPhone 16'
 ```
 
 ### Database Generation
@@ -49,7 +49,7 @@ This creates `aviation.db` with airports and runways tables. The script processe
 ### State Management Pattern
 The app uses SwiftUI's `@StateObject` and `@EnvironmentObject` pattern for global state:
 
-1. **VisualApproachApp.swift** (app entry point) creates three core state objects:
+1. **VirtualPAPIApp.swift** (app entry point) creates three core state objects:
    - `AppSettings`: User preferences (X-Plane mode, debug info display)
    - `GenericLocation`: Abstract location provider consumed by UI
    - `XGPSDataReader`: UDP listener for X-Plane GPS data
@@ -131,7 +131,7 @@ Most views include `#Preview` macros for Xcode canvas previews. When modifying v
 
 ### Commented-Out Features
 Several features are scaffolded but disabled:
-- SwiftData model container (VisualApproachApp.swift:13-24)
+- SwiftData model container (VirtualPAPIApp.swift:13-24)
 - Airport selection and distance-to-destination calculations (ContentView.swift:24-39, GenericLocation.swift:30-48)
 - Location tracker debug UI (ContentView.swift:83-113)
 
@@ -140,6 +140,6 @@ These suggest planned features: persistent storage, airport/runway database inte
 ## Project Configuration
 - **Deployment Target**: iOS 26.0
 - **Development Team**: B4F7YCNRD9
-- **Bundle ID**: com.mfdutra.VisualApproach
+- **Bundle ID**: com.mfdutra.VirtualPAPI
 - **Swift Version**: 5.0
 - **Supported Devices**: iPhone and iPad (universal)
