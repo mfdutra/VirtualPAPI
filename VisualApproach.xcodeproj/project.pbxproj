@@ -12,37 +12,37 @@
 			containerPortal = B9113E492EC9450F00A2EC92 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = B9113E502EC9450F00A2EC92;
-			remoteInfo = VisualApproach;
+			remoteInfo = VirtualPAPI;
 		};
 		B9113E6B2EC9451000A2EC92 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B9113E492EC9450F00A2EC92 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = B9113E502EC9450F00A2EC92;
-			remoteInfo = VisualApproach;
+			remoteInfo = VirtualPAPI;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		B9113E512EC9450F00A2EC92 /* VisualApproach.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VisualApproach.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B9113E602EC9451000A2EC92 /* VisualApproachTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VisualApproachTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B9113E6A2EC9451000A2EC92 /* VisualApproachUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VisualApproachUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B9113E512EC9450F00A2EC92 /* VirtualPAPI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VirtualPAPI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B9113E602EC9451000A2EC92 /* VirtualPAPITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VirtualPAPITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B9113E6A2EC9451000A2EC92 /* VirtualPAPIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VirtualPAPIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B9113E532EC9450F00A2EC92 /* VisualApproach */ = {
+		B9113E532EC9450F00A2EC92 /* VirtualPAPI */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = VisualApproach;
+			path = VirtualPAPI;
 			sourceTree = "<group>";
 		};
-		B9113E632EC9451000A2EC92 /* VisualApproachTests */ = {
+		B9113E632EC9451000A2EC92 /* VirtualPAPITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = VisualApproachTests;
+			path = VirtualPAPITests;
 			sourceTree = "<group>";
 		};
-		B9113E6D2EC9451000A2EC92 /* VisualApproachUITests */ = {
+		B9113E6D2EC9451000A2EC92 /* VirtualPAPIUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = VisualApproachUITests;
+			path = VirtualPAPIUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -75,9 +75,9 @@
 		B9113E482EC9450F00A2EC92 = {
 			isa = PBXGroup;
 			children = (
-				B9113E532EC9450F00A2EC92 /* VisualApproach */,
-				B9113E632EC9451000A2EC92 /* VisualApproachTests */,
-				B9113E6D2EC9451000A2EC92 /* VisualApproachUITests */,
+				B9113E532EC9450F00A2EC92 /* VirtualPAPI */,
+				B9113E632EC9451000A2EC92 /* VirtualPAPITests */,
+				B9113E6D2EC9451000A2EC92 /* VirtualPAPIUITests */,
 				B9113E522EC9450F00A2EC92 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -85,9 +85,9 @@
 		B9113E522EC9450F00A2EC92 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B9113E512EC9450F00A2EC92 /* VisualApproach.app */,
-				B9113E602EC9451000A2EC92 /* VisualApproachTests.xctest */,
-				B9113E6A2EC9451000A2EC92 /* VisualApproachUITests.xctest */,
+				B9113E512EC9450F00A2EC92 /* VirtualPAPI.app */,
+				B9113E602EC9451000A2EC92 /* VirtualPAPITests.xctest */,
+				B9113E6A2EC9451000A2EC92 /* VirtualPAPIUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,9 +95,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B9113E502EC9450F00A2EC92 /* VisualApproach */ = {
+		B9113E502EC9450F00A2EC92 /* VirtualPAPI */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B9113E742EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VisualApproach" */;
+			buildConfigurationList = B9113E742EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VirtualPAPI" */;
 			buildPhases = (
 				B9113E4D2EC9450F00A2EC92 /* Sources */,
 				B9113E4E2EC9450F00A2EC92 /* Frameworks */,
@@ -108,18 +108,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				B9113E532EC9450F00A2EC92 /* VisualApproach */,
+				B9113E532EC9450F00A2EC92 /* VirtualPAPI */,
 			);
-			name = VisualApproach;
+			name = VirtualPAPI;
 			packageProductDependencies = (
 			);
-			productName = VisualApproach;
-			productReference = B9113E512EC9450F00A2EC92 /* VisualApproach.app */;
+			productName = VirtualPAPI;
+			productReference = B9113E512EC9450F00A2EC92 /* VirtualPAPI.app */;
 			productType = "com.apple.product-type.application";
 		};
-		B9113E5F2EC9451000A2EC92 /* VisualApproachTests */ = {
+		B9113E5F2EC9451000A2EC92 /* VirtualPAPITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B9113E772EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VisualApproachTests" */;
+			buildConfigurationList = B9113E772EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VirtualPAPITests" */;
 			buildPhases = (
 				B9113E5C2EC9451000A2EC92 /* Sources */,
 				B9113E5D2EC9451000A2EC92 /* Frameworks */,
@@ -131,18 +131,18 @@
 				B9113E622EC9451000A2EC92 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				B9113E632EC9451000A2EC92 /* VisualApproachTests */,
+				B9113E632EC9451000A2EC92 /* VirtualPAPITests */,
 			);
-			name = VisualApproachTests;
+			name = VirtualPAPITests;
 			packageProductDependencies = (
 			);
-			productName = VisualApproachTests;
-			productReference = B9113E602EC9451000A2EC92 /* VisualApproachTests.xctest */;
+			productName = VirtualPAPITests;
+			productReference = B9113E602EC9451000A2EC92 /* VirtualPAPITests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		B9113E692EC9451000A2EC92 /* VisualApproachUITests */ = {
+		B9113E692EC9451000A2EC92 /* VirtualPAPIUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B9113E7A2EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VisualApproachUITests" */;
+			buildConfigurationList = B9113E7A2EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VirtualPAPIUITests" */;
 			buildPhases = (
 				B9113E662EC9451000A2EC92 /* Sources */,
 				B9113E672EC9451000A2EC92 /* Frameworks */,
@@ -154,13 +154,13 @@
 				B9113E6C2EC9451000A2EC92 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				B9113E6D2EC9451000A2EC92 /* VisualApproachUITests */,
+				B9113E6D2EC9451000A2EC92 /* VirtualPAPIUITests */,
 			);
-			name = VisualApproachUITests;
+			name = VirtualPAPIUITests;
 			packageProductDependencies = (
 			);
-			productName = VisualApproachUITests;
-			productReference = B9113E6A2EC9451000A2EC92 /* VisualApproachUITests.xctest */;
+			productName = VirtualPAPIUITests;
+			productReference = B9113E6A2EC9451000A2EC92 /* VirtualPAPIUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -186,7 +186,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B9113E4C2EC9450F00A2EC92 /* Build configuration list for PBXProject "VisualApproach" */;
+			buildConfigurationList = B9113E4C2EC9450F00A2EC92 /* Build configuration list for PBXProject "VirtualPAPI" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -200,9 +200,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				B9113E502EC9450F00A2EC92 /* VisualApproach */,
-				B9113E5F2EC9451000A2EC92 /* VisualApproachTests */,
-				B9113E692EC9451000A2EC92 /* VisualApproachUITests */,
+				B9113E502EC9450F00A2EC92 /* VirtualPAPI */,
+				B9113E5F2EC9451000A2EC92 /* VirtualPAPITests */,
+				B9113E692EC9451000A2EC92 /* VirtualPAPIUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -258,12 +258,12 @@
 /* Begin PBXTargetDependency section */
 		B9113E622EC9451000A2EC92 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = B9113E502EC9450F00A2EC92 /* VisualApproach */;
+			target = B9113E502EC9450F00A2EC92 /* VirtualPAPI */;
 			targetProxy = B9113E612EC9451000A2EC92 /* PBXContainerItemProxy */;
 		};
 		B9113E6C2EC9451000A2EC92 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = B9113E502EC9450F00A2EC92 /* VisualApproach */;
+			target = B9113E502EC9450F00A2EC92 /* VirtualPAPI */;
 			targetProxy = B9113E6B2EC9451000A2EC92 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -402,9 +402,9 @@
 				DEVELOPMENT_TEAM = B4F7YCNRD9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Visual Approach";
+				INFOPLIST_KEY_CFBundleDisplayName = "Virtual PAPI";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "VisualApproach needs access to your location to provide visual approach guidance and calculate distance to your destination.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "VirtualPAPI needs access to your location to provide visual approach guidance and calculate distance to your destination.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -416,7 +416,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VisualApproach;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VirtualPAPI;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -441,9 +441,9 @@
 				DEVELOPMENT_TEAM = B4F7YCNRD9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Visual Approach";
+				INFOPLIST_KEY_CFBundleDisplayName = "Virtual PAPI";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "VisualApproach needs access to your location to provide visual approach guidance and calculate distance to your destination.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "VirtualPAPI needs access to your location to provide visual approach guidance and calculate distance to your destination.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -455,7 +455,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VisualApproach;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VirtualPAPI;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -480,7 +480,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VisualApproachTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VirtualPAPITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -488,7 +488,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VisualApproach.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VisualApproach";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VirtualPAPI.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VirtualPAPI";
 			};
 			name = Debug;
 		};
@@ -502,7 +502,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VisualApproachTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VirtualPAPITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -510,7 +510,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VisualApproach.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VisualApproach";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VirtualPAPI.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VirtualPAPI";
 			};
 			name = Release;
 		};
@@ -522,7 +522,7 @@
 				DEVELOPMENT_TEAM = B4F7YCNRD9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VisualApproachUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VirtualPAPIUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -530,7 +530,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = VisualApproach;
+				TEST_TARGET_NAME = VirtualPAPI;
 			};
 			name = Debug;
 		};
@@ -542,7 +542,7 @@
 				DEVELOPMENT_TEAM = B4F7YCNRD9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VisualApproachUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mfdutra.VirtualPAPIUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -550,14 +550,14 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = VisualApproach;
+				TEST_TARGET_NAME = VirtualPAPI;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B9113E4C2EC9450F00A2EC92 /* Build configuration list for PBXProject "VisualApproach" */ = {
+		B9113E4C2EC9450F00A2EC92 /* Build configuration list for PBXProject "VirtualPAPI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B9113E722EC9451000A2EC92 /* Debug */,
@@ -566,7 +566,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B9113E742EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VisualApproach" */ = {
+		B9113E742EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VirtualPAPI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B9113E752EC9451000A2EC92 /* Debug */,
@@ -575,7 +575,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B9113E772EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VisualApproachTests" */ = {
+		B9113E772EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VirtualPAPITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B9113E782EC9451000A2EC92 /* Debug */,
@@ -584,7 +584,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B9113E7A2EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VisualApproachUITests" */ = {
+		B9113E7A2EC9451000A2EC92 /* Build configuration list for PBXNativeTarget "VirtualPAPIUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B9113E7B2EC9451000A2EC92 /* Debug */,

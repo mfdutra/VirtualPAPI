@@ -1,13 +1,13 @@
 //
-//  VisualApproachUITests.swift
-//  VisualApproachUITests
+//  VirtualPAPIUITests.swift
+//  VirtualPAPIUITests
 //
 //  Created by Marlon Dutra on 11/15/25.
 //
 
 import XCTest
 
-final class VisualApproachUITests: XCTestCase {
+final class VirtualPAPIUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

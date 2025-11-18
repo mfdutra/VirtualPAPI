@@ -1,6 +1,6 @@
 //
-//  VisualApproachApp.swift
-//  VisualApproach
+//  VirtualPAPIApp.swift
+//  VirtualPAPI
 //
 //  Created by Marlon Dutra on 11/15/25.
 //
@@ -10,7 +10,7 @@ import SwiftData
 import SwiftUI
 
 @main
-struct VisualApproachApp: App {
+struct VirtualPAPIApp: App {
     @StateObject private var appSettings = AppSettings()
     @StateObject private var genericLocation = GenericLocation()
     @StateObject private var xgpsDataReader = XGPSDataReader()
