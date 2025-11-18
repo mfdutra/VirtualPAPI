@@ -26,6 +26,7 @@ def create_database(db_path='aviation.db'):
         CREATE TABLE airports (
             ident TEXT PRIMARY KEY,
             name TEXT,
+            iata_code TEXT,
             latitude_deg REAL,
             longitude_deg REAL,
             elevation_ft INTEGER
@@ -59,13 +60,14 @@ def create_database(db_path='aviation.db'):
             airports_data.append((
                 row['ident'],
                 row['name'],
+                row['iata_code'] if row['iata_code'] else None,
                 float(row['latitude_deg']) if row['latitude_deg'] else None,
                 float(row['longitude_deg']) if row['longitude_deg'] else None,
-                int(row['elevation_ft']) if row['elevation_ft'] else None
+                int(row['elevation_ft']) if row['elevation_ft'] else None,
             ))
 
         cursor.executemany('''
-            INSERT INTO airports VALUES (?,?,?,?,?)
+            INSERT INTO airports VALUES (?,?,?,?,?,?)
         ''', airports_data)
         print(f"Loaded {len(airports_data)} airports")
 
@@ -133,8 +135,18 @@ def create_database(db_path='aviation.db'):
     cursor.execute(
         'CREATE INDEX idx_runways_airport_ident ON runways(airport_ident)')
 
+    # Remove airports without associated runways
+    print("Removing airports without runways...")
+    cursor.execute('''
+        DELETE FROM airports
+        WHERE ident NOT IN (SELECT DISTINCT airport_ident FROM runways)
+    ''')
+    removed_count = cursor.rowcount
+    print(f"Removed {removed_count} airports without runways")
+
     # Commit and close
     conn.commit()
+    cursor.execute('VACUUM')
     print(f"\nDatabase created successfully: {db_path}")
 
     # Print some statistics
