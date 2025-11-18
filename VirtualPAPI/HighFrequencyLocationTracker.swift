@@ -42,6 +42,7 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
                 || authorizationStatus == .authorizedAlways
         else {
             requestLocationPermission()
+            isTracking = true  // Mark as wanting to track
             return
         }
 
