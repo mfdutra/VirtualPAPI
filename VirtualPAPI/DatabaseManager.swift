@@ -46,6 +46,7 @@ class DatabaseManager {
             SELECT ident, name, latitude_deg, longitude_deg, elevation_ft
             FROM airports
             WHERE ident LIKE ?
+            OR iata_code LIKE ?
             ORDER BY ident
             LIMIT 100
         """
