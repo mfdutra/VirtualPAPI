@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "78BE70C6-1E26-446E-BC81-FDE448FAAEF8",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:VirtualPAPI.xcodeproj",
+      "identifier" : "B9113E502EC9450F00A2EC92",
+      "name" : "VirtualPAPI"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:VirtualPAPI.xcodeproj",
+        "identifier" : "B9113E5F2EC9451000A2EC92",
+        "name" : "VirtualPAPITests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:VirtualPAPI.xcodeproj",
+        "identifier" : "B9113E692EC9451000A2EC92",
+        "name" : "VirtualPAPIUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

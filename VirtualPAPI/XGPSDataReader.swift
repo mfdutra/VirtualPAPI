@@ -113,7 +113,7 @@ class XGPSDataReader: ObservableObject {
         }
     }
     
-    private func processXGPSData(_ data: Data) {
+    func processXGPSData(_ data: Data) {
         guard data.count >= 41 else { return }
 
         let header = String(data: data.prefix(4), encoding: .ascii)
