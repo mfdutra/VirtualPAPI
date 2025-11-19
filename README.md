@@ -8,7 +8,7 @@ The glide slope will provide accurate vertical guidance to the aiming point from
 
 The app comes with over 30 thousand runways in its offline database, and more will be added as they are discovered. The app works completely offline and never tries to use the internet. All it needs is access to your location.
 
-You can find it on the Apple's App Store.
+You can find it on the [Apple's App Store](https://apps.apple.com/us/app/virtual-papi/id6755373746).
 
 ## How to contribute
 
