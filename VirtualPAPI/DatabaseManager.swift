@@ -38,6 +38,42 @@ class DatabaseManager {
         }
     }
     
+    // Get a specific airport by its identifier
+    func getAirport(ident: String) -> Airport? {
+        let queryString = """
+            SELECT ident, name, latitude_deg, longitude_deg, elevation_ft
+            FROM airports
+            WHERE ident = ?
+            LIMIT 1
+        """
+        
+        var statement: OpaquePointer?
+        var airport: Airport?
+        
+        if sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK {
+            sqlite3_bind_text(statement, 1, (ident as NSString).utf8String, -1, nil)
+            
+            if sqlite3_step(statement) == SQLITE_ROW {
+                let ident = String(cString: sqlite3_column_text(statement, 0))
+                let name = String(cString: sqlite3_column_text(statement, 1))
+                let latitude = sqlite3_column_double(statement, 2)
+                let longitude = sqlite3_column_double(statement, 3)
+                let elevation = sqlite3_column_double(statement, 4)
+                
+                airport = Airport(
+                    ident: ident,
+                    name: name,
+                    latitude_deg: latitude,
+                    longitude_deg: longitude,
+                    elevation_ft: elevation
+                )
+            }
+        }
+        
+        sqlite3_finalize(statement)
+        return airport
+    }
+    
     // Search airports by ICAO code or name
     func searchAirports(query: String) -> [Airport] {
         var airports: [Airport] = []

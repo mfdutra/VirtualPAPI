@@ -73,6 +73,19 @@ struct AirportSelectionView: View {
                         }
                         Spacer()
                         Button(action: {
+                            airportSelection.toggleFavorite(airport.ident)
+                        }) {
+                            Image(
+                                systemName: airportSelection.isFavorite(
+                                    airport.ident
+                                ) ? "star.fill" : "star"
+                            )
+                            .foregroundColor(
+                                airportSelection.isFavorite(airport.ident)
+                                    ? .yellow : .secondary
+                            )
+                        }
+                        Button(action: {
                             airportSelection.clear()
                             availableRunways = []
                         }) {
@@ -103,30 +116,103 @@ struct AirportSelectionView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if searchResults.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 60))
-                            .foregroundColor(.secondary)
-                        Text("Search for an airport")
-                            .foregroundColor(.secondary)
+                    ScrollView {
+                        if airportSelection.favoriteAirports.isEmpty {
+                            VStack(spacing: 10) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(.secondary)
+                                Text("Search for an airport")
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding()
+                        } else {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Favorite Airports")
+                                    .font(.headline)
+                                    .padding(.horizontal)
+                                    .padding(.top)
+
+                                LazyVGrid(
+                                    columns: [
+                                        GridItem(
+                                            .adaptive(minimum: 100),
+                                            spacing: 12
+                                        )
+                                    ],
+                                    spacing: 12
+                                ) {
+                                    ForEach(
+                                        airportSelection.favoriteAirports
+                                            .sorted(),
+                                        id: \.self
+                                    ) { airportIdent in
+                                        Button(action: {
+                                            if let airport =
+                                                databaseManager.getAirport(
+                                                    ident: airportIdent
+                                                )
+                                            {
+                                                selectAirport(airport)
+                                            }
+                                        }) {
+                                            VStack(spacing: 4) {
+                                                Image(systemName: "star.fill")
+                                                    .foregroundColor(.yellow)
+                                                    .font(.title3)
+                                                Text(airportIdent)
+                                                    .font(.headline)
+                                                    .foregroundColor(.primary)
+                                            }
+                                            .frame(maxWidth: .infinity)
+                                            .padding()
+                                            .background(Color(.systemGray6))
+                                            .cornerRadius(10)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(searchResults, id: \.ident) { airport in
                         Button(action: {
                             selectAirport(airport)
                         }) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(airport.ident)
-                                    .font(.headline)
-                                Text(airport.name)
-                                    .font(.subheadline)
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(airport.ident)
+                                        .font(.headline)
+                                    Text(airport.name)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    Text(
+                                        "Elevation: \(Int(airport.elevation_ft)) ft"
+                                    )
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
-                                Text(
-                                    "Elevation: \(Int(airport.elevation_ft)) ft"
-                                )
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Button(action: {
+                                    airportSelection.toggleFavorite(
+                                        airport.ident
+                                    )
+                                }) {
+                                    Image(
+                                        systemName: airportSelection.isFavorite(
+                                            airport.ident
+                                        ) ? "star.fill" : "star"
+                                    )
+                                    .foregroundColor(
+                                        airportSelection.isFavorite(
+                                            airport.ident
+                                        ) ? .yellow : .secondary
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
                             .padding(.vertical, 4)
                         }

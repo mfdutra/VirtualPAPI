@@ -16,6 +16,36 @@ class AirportSelection: ObservableObject {
     @Published var targetLatitude: Double?
     @Published var targetLongitude: Double?
     @Published var aimingPoint: Double = 500
+    @Published var favoriteAirports: Set<String> = []
+    
+    private let favoritesKey = "favoriteAirports"
+    
+    init() {
+        loadFavorites()
+    }
+    
+    func isFavorite(_ airportIdent: String) -> Bool {
+        favoriteAirports.contains(airportIdent)
+    }
+    
+    func toggleFavorite(_ airportIdent: String) {
+        if favoriteAirports.contains(airportIdent) {
+            favoriteAirports.remove(airportIdent)
+        } else {
+            favoriteAirports.insert(airportIdent)
+        }
+        saveFavorites()
+    }
+    
+    private func loadFavorites() {
+        if let data = UserDefaults.standard.array(forKey: favoritesKey) as? [String] {
+            favoriteAirports = Set(data)
+        }
+    }
+    
+    private func saveFavorites() {
+        UserDefaults.standard.set(Array(favoriteAirports), forKey: favoritesKey)
+    }
 
     func setAirport(_ airport: Airport) {
         self.selectedAirport = airport

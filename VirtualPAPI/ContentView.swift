@@ -16,13 +16,14 @@ struct ContentView: View {
     @EnvironmentObject var appSettings: AppSettings
     @EnvironmentObject var xgpsDataReader: XGPSDataReader
     @EnvironmentObject var airportSelection: AirportSelection
+    @State private var navigateToAirportSelection = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 5) {
-
-                // Data bar
-                if let selectedAirport = airportSelection.selectedAirport {
+                if let selectedAirport = airportSelection.selectedAirport,
+                    airportSelection.selectedRunway != nil
+                {
                     HStack {
                         Text("DST")
                         Text(selectedAirport.ident)
@@ -52,6 +53,7 @@ struct ContentView: View {
                     .padding(.vertical, 8)
 
                     GeometryReader { geometry in
+                        // Glide slope indicator
                         ZStack {
                             // Background
                             Rectangle()
@@ -113,6 +115,8 @@ struct ContentView: View {
                     }
                 } else {
                     VStack(spacing: 10) {
+                        Spacer()
+
                         Image(systemName: "airplane.circle")
                             .font(.system(size: 60))
                             .foregroundColor(.secondary)
@@ -125,6 +129,52 @@ struct ContentView: View {
                         Text("USE IN VISUAL CONDITIONS ONLY")
                             .foregroundColor(.red)
                             .bold()
+
+                        Spacer()
+
+                        // Favorite Airports Section
+                        if !airportSelection.favoriteAirports.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Favorite Airports")
+                                    .font(.headline)
+                                    .padding(.horizontal)
+
+                                ScrollView(.horizontal, showsIndicators: false)
+                                {
+                                    HStack(spacing: 12) {
+                                        ForEach(
+                                            airportSelection.favoriteAirports
+                                                .sorted(),
+                                            id: \.self
+                                        ) { airportIdent in
+                                            Button(action: {
+                                                loadFavoriteAirport(
+                                                    airportIdent
+                                                )
+                                            }) {
+                                                VStack(spacing: 4) {
+                                                    Image(
+                                                        systemName: "star.fill"
+                                                    )
+                                                    .foregroundColor(.yellow)
+                                                    Text(airportIdent)
+                                                        .font(.headline)
+                                                        .foregroundColor(
+                                                            .primary
+                                                        )
+                                                }
+                                                .frame(width: 80, height: 80)
+                                                .background(Color(.systemGray6))
+                                                .cornerRadius(10)
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                    .padding(.horizontal)
+                                }
+                            }
+                            .padding(.bottom, 10)
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -157,6 +207,17 @@ struct ContentView: View {
                         }
                 }
             }
+            .navigationDestination(isPresented: $navigateToAirportSelection) {
+                AirportSelectionView()
+            }
+        }
+    }
+
+    private func loadFavoriteAirport(_ airportIdent: String) {
+        let databaseManager = DatabaseManager()
+        if let airport = databaseManager.getAirport(ident: airportIdent) {
+            airportSelection.setAirport(airport)
+            navigateToAirportSelection = true
         }
     }
 
