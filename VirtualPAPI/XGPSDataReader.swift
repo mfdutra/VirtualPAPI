@@ -107,9 +107,11 @@ class XGPSDataReader: ObservableObject {
 
     fileprivate func updateGenericLocation(_ latitude: Double, _ longitude: Double, _ altitude: Double) {
         if appSettings!.locationSource == .xPlane {
-            self.genericLocation?.latitude = latitude
-            self.genericLocation?.longitude = longitude
-            self.genericLocation?.altitude = altitude
+            self.genericLocation?.updateLocation(
+                latitude: latitude,
+                longitude: longitude,
+                altitude: altitude
+            )
         }
     }
     

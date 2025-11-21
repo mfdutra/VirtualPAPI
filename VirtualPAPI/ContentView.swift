@@ -26,13 +26,13 @@ struct ContentView: View {
                     HStack {
                         Text("DST")
                         Text(selectedAirport.ident)
-                            .foregroundColor(Color(red: 1, green: 0, blue: 1))
+                            .foregroundColor(getLocationColor())
                             .bold()
                         if let runway = airportSelection.selectedRunway {
                             Text("RWY")
                             Text(runway.ident)
                                 .foregroundColor(
-                                    Color(red: 1, green: 0, blue: 1)
+                                    getLocationColor()
                                 )
                                 .bold()
                         }
@@ -40,13 +40,13 @@ struct ContentView: View {
                         Text(
                             "\(genericLocation.distanceToDestination, specifier: "%.1f")"
                         )
-                        .foregroundColor(Color(red: 1, green: 0, blue: 1))
+                        .foregroundColor(getLocationColor())
                         .bold()
                         Text("ANG")
                         Text(
                             "\(genericLocation.angleToDestination, specifier: "%.1f")"
                         )
-                        .foregroundColor(Color(red: 1, green: 0, blue: 1))
+                        .foregroundColor(getLocationColor())
                         .bold()
                     }
                     .padding(.vertical, 8)
@@ -88,7 +88,7 @@ struct ContentView: View {
                             // Glide path
                             Rectangle()
                                 .stroke(Color.black, lineWidth: 2)
-                                .background(Color(red: 1, green: 0, blue: 1))
+                                .background(getLocationColor())
                                 .rotationEffect(Angle(degrees: 45))
                                 .frame(width: 65, height: 65)
                                 .opacity(0.9)
@@ -198,11 +198,20 @@ struct ContentView: View {
                     switch appSettings.locationSource {
                     case .internalGPS:
                         Text("Using Internal GPS")
+                            .foregroundColor(.secondary)
                     case .xPlane:
                         Text("Using X-Plane")
+                            .foregroundColor(.secondary)
                     case .gdl90:
                         Text("Using GDL90")
+                            .foregroundColor(.secondary)
                     }
+                }
+
+                if genericLocation.locationIsStale {
+                    Text("⚠️ Not getting location data ⚠️")
+                        .foregroundColor(.red)
+                        .bold()
                 }
             }
             .navigationDestination(isPresented: $navigateToAirportSelection) {
@@ -216,6 +225,15 @@ struct ContentView: View {
         if let airport = databaseManager.getAirport(ident: airportIdent) {
             airportSelection.setAirport(airport)
             navigateToAirportSelection = true
+        }
+    }
+
+    // If location data is lost, purple things become yellow
+    private func getLocationColor() -> Color {
+        if genericLocation.locationIsStale {
+            return Color(red: 0.8, green: 0.8, blue: 0)
+        } else {
+            return Color(red: 1, green: 0, blue: 1)
         }
     }
 

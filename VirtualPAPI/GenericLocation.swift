@@ -15,8 +15,11 @@ class GenericLocation: ObservableObject {
     @Published var distanceToDestination: Double = 0
     @Published var angleToDestination: Double = 0
     @Published var gsOffset: Double = 0
+    @Published var lastUpdateTime: Date?
+    @Published var locationIsStale: Bool = false
 
     private var timer: Timer?
+    private var stalenessTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     var airportSelection: AirportSelection? {
         didSet {
@@ -26,10 +29,12 @@ class GenericLocation: ObservableObject {
 
     init() {
         startDistanceCalculation()
+        startStalenessCheck()
     }
 
     deinit {
         timer?.invalidate()
+        stalenessTimer?.invalidate()
     }
 
     func reset() {
@@ -39,6 +44,43 @@ class GenericLocation: ObservableObject {
         self.distanceToDestination = 0
         self.angleToDestination = 0
         self.gsOffset = 0
+        self.locationIsStale = true
+        self.lastUpdateTime = nil
+    }
+
+    /// Update the current location coordinates
+    /// - Parameters:
+    ///   - latitude: Latitude in degrees
+    ///   - longitude: Longitude in degrees
+    ///   - altitude: Altitude in feet
+    func updateLocation(latitude: Double, longitude: Double, altitude: Double) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+        self.lastUpdateTime = Date()
+        self.locationIsStale = false
+    }
+
+    // Check location staleness every 5 seconds
+    private func startStalenessCheck() {
+        stalenessTimer?.invalidate()
+        stalenessTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) {
+            [weak self] _ in
+            self?.checkStaleness()
+        }
+    }
+
+    private func checkStaleness() {
+        guard let lastUpdate = lastUpdateTime else {
+            // No update yet, mark as stale
+            self.locationIsStale = true
+            return
+        }
+
+        let timeSinceLastUpdate = Date().timeIntervalSince(lastUpdate)
+        if timeSinceLastUpdate > 5.0 {
+            self.locationIsStale = true
+        }
     }
 
     // Update distance to destination every second

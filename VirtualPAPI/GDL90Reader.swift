@@ -120,9 +120,11 @@ class GDL90Reader: ObservableObject {
     ) {
         // Only update GenericLocation if GDL90 is the selected source
         if appSettings?.locationSource == .gdl90 {
-            self.genericLocation?.latitude = latitude
-            self.genericLocation?.longitude = longitude
-            self.genericLocation?.altitude = altitude
+            self.genericLocation?.updateLocation(
+                latitude: latitude,
+                longitude: longitude,
+                altitude: altitude
+            )
         }
     }
 

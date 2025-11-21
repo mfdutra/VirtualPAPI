@@ -98,9 +98,11 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
                 let currentLocation = self.currentLocation,
                 let elevation = self.elevation
             {
-                genericLocation.latitude = currentLocation.latitude
-                genericLocation.longitude = currentLocation.longitude
-                genericLocation.altitude = elevation * 3.2808399  // meter to feet
+                genericLocation.updateLocation(
+                    latitude: currentLocation.latitude,
+                    longitude: currentLocation.longitude,
+                    altitude: elevation * 3.2808399  // meter to feet
+                )
             }
         }
     }
