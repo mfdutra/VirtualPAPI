@@ -32,6 +32,15 @@ class GenericLocation: ObservableObject {
         timer?.invalidate()
     }
 
+    func reset() {
+        self.latitude = 0
+        self.longitude = 0
+        self.altitude = 0
+        self.distanceToDestination = 0
+        self.angleToDestination = 0
+        self.gsOffset = 0
+    }
+
     // Update distance to destination every second
     private func startDistanceCalculation() {
         timer?.invalidate()

@@ -36,7 +36,39 @@ struct VirtualPAPIApp: App {
                     locationTracker.appSettings = appSettings
                     locationTracker.genericLocation = genericLocation
                     locationTracker.startTracking()
+
+                    // Start the initial location source listener
+                    startListenerForSource(appSettings.locationSource)
                 }
+                .onChange(of: appSettings.locationSource) { oldValue, newValue in
+                    stopListenerForSource(oldValue)
+                    startListenerForSource(newValue)
+                }
+        }
+    }
+
+    private func startListenerForSource(_ source: LocationSource) {
+        genericLocation.reset()
+        switch source {
+        case .internalGPS:
+            // HighFrequencyLocationTracker is already started in onAppear
+            break
+        case .xPlane:
+            xgpsDataReader.startListening()
+        case .gdl90:
+            gdl90Reader.startListening()
+        }
+    }
+
+    private func stopListenerForSource(_ source: LocationSource) {
+        switch source {
+        case .internalGPS:
+            // Don't stop HighFrequencyLocationTracker as it runs continuously
+            break
+        case .xPlane:
+            xgpsDataReader.stopListening()
+        case .gdl90:
+            gdl90Reader.stopListening()
         }
     }
 }
