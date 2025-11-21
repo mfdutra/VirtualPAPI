@@ -20,6 +20,7 @@ class GDL90Reader: ObservableObject {
 
     private var udpListener: NWListener?
     private var udpConnection: NWConnection?
+    private var broadcastTimer: Timer?
     private let queue = DispatchQueue(label: "gdl90-udp-queue")
 
     var genericLocation: GenericLocation?
@@ -28,8 +29,10 @@ class GDL90Reader: ObservableObject {
     deinit {
         udpListener?.cancel()
         udpConnection?.cancel()
+        broadcastTimer?.invalidate()
         udpListener = nil
         udpConnection = nil
+        broadcastTimer = nil
     }
 
     func startListening() {
@@ -65,6 +68,7 @@ class GDL90Reader: ObservableObject {
         }
 
         udpListener?.start(queue: queue)
+        startBroadcastHeartbeat()
     }
 
     private func setupConnection(_ connection: NWConnection) {
@@ -88,10 +92,57 @@ class GDL90Reader: ObservableObject {
     }
 
     func stopListening() {
+        broadcastTimer?.invalidate()
+        broadcastTimer = nil
         udpListener?.cancel()
         udpConnection?.cancel()
         udpListener = nil
         udpConnection = nil
+    }
+
+    private func startBroadcastHeartbeat() {
+        // Send initial broadcast immediately
+        Task { @MainActor in
+            await self.sendBroadcast()
+        }
+
+        // Schedule broadcasts every 5 seconds
+        broadcastTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.sendBroadcast()
+            }
+        }
+    }
+
+    private func sendBroadcast() async {
+        let jsonString = "{\"App\": \"VirtualPAPI\", \"GDL90\": {\"port\": 4000}}"
+        guard let data = jsonString.data(using: .utf8) else { return }
+
+        // Create a UDP connection for broadcasting
+        let broadcastEndpoint = NWEndpoint.hostPort(
+            host: NWEndpoint.Host("255.255.255.255"),
+            port: NWEndpoint.Port(integerLiteral: 63093)
+        )
+
+        let parameters = NWParameters.udp
+        parameters.allowLocalEndpointReuse = true
+        parameters.requiredInterfaceType = .wifi
+
+        let connection = NWConnection(to: broadcastEndpoint, using: parameters)
+
+        connection.stateUpdateHandler = { (state: NWConnection.State) in
+            if case .ready = state {
+                connection.send(content: data, completion: .idempotent)
+            } else if case .failed(let error) = state {
+                print("Broadcast connection failed: \(error)")
+            }
+        }
+
+        connection.start(queue: queue)
+
+        // Wait a bit for the send to complete, then cancel
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        connection.cancel()
     }
 
     private func receiveData(from connection: NWConnection) {
