@@ -8,7 +8,11 @@ struct SettingsView: View {
     var body: some View {
         List {
             Section("Location source") {
-                Toggle("Use X-Plane", isOn: $settings.useXPlane)
+                Picker("Source", selection: $settings.locationSource) {
+                    ForEach(LocationSource.allCases) { source in
+                        Text(source.rawValue).tag(source)
+                    }
+                }
             }
             
             Section("Network") {
@@ -22,6 +26,8 @@ struct SettingsView: View {
             
             Section("Debug") {
                 Toggle("Show Debug Info", isOn: $settings.showDebugInfo)
+
+                NavigationLink("GDL90 Debug", destination: GDL90DebugView())
             }
         }
         .navigationTitle("Settings")

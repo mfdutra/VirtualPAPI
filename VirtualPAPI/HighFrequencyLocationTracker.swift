@@ -91,16 +91,18 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
             self.accuracy = location.horizontalAccuracy
             self.elevation = location.altitude
 
-            // Only update genericLocation if not using X-Plane
+            // Only update genericLocation if using internal GPS
             if let appSettings = self.appSettings,
-                !appSettings.useXPlane,
+                appSettings.locationSource == .internalGPS,
                 let genericLocation = self.genericLocation,
                 let currentLocation = self.currentLocation,
                 let elevation = self.elevation
             {
-                genericLocation.latitude = currentLocation.latitude
-                genericLocation.longitude = currentLocation.longitude
-                genericLocation.altitude = elevation * 3.2808399  // meter to feet
+                genericLocation.updateLocation(
+                    latitude: currentLocation.latitude,
+                    longitude: currentLocation.longitude,
+                    altitude: elevation * 3.2808399  // meter to feet
+                )
             }
         }
     }
