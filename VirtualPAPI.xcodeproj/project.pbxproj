@@ -27,7 +27,7 @@
 		B9113E512EC9450F00A2EC92 /* VirtualPAPI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VirtualPAPI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9113E602EC9451000A2EC92 /* VirtualPAPITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VirtualPAPITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9113E6A2EC9451000A2EC92 /* VirtualPAPIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VirtualPAPIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B9FF7B292ECD8FDF00EEA67B /* VirtualPAPI.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = file; path = VirtualPAPI.xctestplan; sourceTree = "<group>"; };
+		B9FF7B292ECD8FDF00EEA67B /* VirtualPAPI.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = VirtualPAPI.xctestplan; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */

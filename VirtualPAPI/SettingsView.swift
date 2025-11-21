@@ -22,6 +22,8 @@ struct SettingsView: View {
             
             Section("Debug") {
                 Toggle("Show Debug Info", isOn: $settings.showDebugInfo)
+
+                NavigationLink("GDL90 Debug", destination: GDL90DebugView())
             }
         }
         .navigationTitle("Settings")
