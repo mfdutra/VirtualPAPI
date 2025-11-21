@@ -8,7 +8,21 @@
 import Combine
 import SwiftUI
 
+enum LocationSource: String, CaseIterable, Identifiable {
+    case internalGPS = "Internal GPS"
+    case xPlane = "X-Plane"
+    case gdl90 = "GDL90"
+
+    var id: String { rawValue }
+}
+
 class AppSettings: ObservableObject {
+    @Published var locationSource: LocationSource {
+        didSet {
+            UserDefaults.standard.set(locationSource.rawValue, forKey: "locationSource")
+        }
+    }
+
     @Published var useXPlane: Bool {
         didSet {
             UserDefaults.standard.set(useXPlane, forKey: "useXPlane")
@@ -28,6 +42,17 @@ class AppSettings: ObservableObject {
     }
 
     init() {
+        // Migrate from old useXPlane boolean if needed
+        if let savedSource = UserDefaults.standard.string(forKey: "locationSource"),
+           let source = LocationSource(rawValue: savedSource) {
+            self.locationSource = source
+        } else if UserDefaults.standard.object(forKey: "useXPlane") as? Bool == true {
+            // Migrate old setting
+            self.locationSource = .xPlane
+        } else {
+            self.locationSource = .internalGPS
+        }
+
         self.useXPlane =
             UserDefaults.standard.object(forKey: "useXPlane") as? Bool ?? false
         self.showDebugInfo =

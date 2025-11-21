@@ -8,7 +8,11 @@ struct SettingsView: View {
     var body: some View {
         List {
             Section("Location source") {
-                Toggle("Use X-Plane", isOn: $settings.useXPlane)
+                Picker("Source", selection: $settings.locationSource) {
+                    ForEach(LocationSource.allCases) { source in
+                        Text(source.rawValue).tag(source)
+                    }
+                }
             }
             
             Section("Network") {

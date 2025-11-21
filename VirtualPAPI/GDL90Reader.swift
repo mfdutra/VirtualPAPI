@@ -118,11 +118,12 @@ class GDL90Reader: ObservableObject {
         _ longitude: Double,
         _ altitude: Double
     ) {
-        // Update GenericLocation if GDL90 is enabled (similar to useXPlane flag)
-        // For now, always update - can add a useGDL90 flag to AppSettings if needed
-        self.genericLocation?.latitude = latitude
-        self.genericLocation?.longitude = longitude
-        self.genericLocation?.altitude = altitude
+        // Only update GenericLocation if GDL90 is the selected source
+        if appSettings?.locationSource == .gdl90 {
+            self.genericLocation?.latitude = latitude
+            self.genericLocation?.longitude = longitude
+            self.genericLocation?.altitude = altitude
+        }
     }
 
     func processGDL90Data(_ data: Data) {

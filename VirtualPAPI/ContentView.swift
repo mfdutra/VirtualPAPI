@@ -15,6 +15,7 @@ struct ContentView: View {
     @EnvironmentObject var genericLocation: GenericLocation
     @EnvironmentObject var appSettings: AppSettings
     @EnvironmentObject var xgpsDataReader: XGPSDataReader
+    @EnvironmentObject var gdl90Reader: GDL90Reader
     @EnvironmentObject var airportSelection: AirportSelection
     @State private var navigateToAirportSelection = false
 
@@ -197,13 +198,24 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
                 }
 
-                if appSettings.useXPlane {
+                switch appSettings.locationSource {
+                case .internalGPS:
+                    Text("Using Internal GPS")
+                case .xPlane:
                     Text("Using X-Plane")
                         .onAppear {
                             xgpsDataReader.startListening()
                         }
                         .onDisappear {
                             xgpsDataReader.stopListening()
+                        }
+                case .gdl90:
+                    Text("Using GDL90")
+                        .onAppear {
+                            gdl90Reader.startListening()
+                        }
+                        .onDisappear {
+                            gdl90Reader.stopListening()
                         }
                 }
             }
