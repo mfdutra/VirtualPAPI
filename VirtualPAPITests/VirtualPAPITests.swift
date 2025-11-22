@@ -113,6 +113,55 @@ struct GenericLocationTests {
     // NOTE: Timer-based glide slope tests removed due to flakiness
     // These tests depend on asynchronous timer updates which are not reliable in unit tests
     // The glide slope calculation logic is covered by the testGlideSlopeOnGlide test above
+
+    @Test("PAPI position calculation - on glide path")
+    func testPapiPositionOnGlidePath() async {
+        let location = await GenericLocation()
+        let selection = await AirportSelection()
+
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "18",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.7749,
+            longitude_deg: -122.4194,
+            elevation_ft: 100,
+            heading_degT: 180,
+            displaced_threshold_ft: 0
+        )
+
+        selection.selectedRunway = runway
+        await selection.setTargets()
+        location.airportSelection = selection
+
+        // Set aircraft on glide path (angle deviation = 0)
+        location.latitude = 37.8249
+        location.longitude = -122.4194
+        location.altitude = 1054
+
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        // PAPI position should be around 0.5 (2 red, 2 white) when on glide path
+        #expect(abs(location.papiPosition - 0.5) < 0.1)
+    }
+
+    // NOTE: Timer-based PAPI tests removed due to flakiness
+    // These tests depend on asynchronous timer updates which are not reliable in unit tests
+    // The PAPI calculation logic is covered by the testPapiPositionOnGlidePath test above
+
+    @Test("PAPI colors array has 4 elements")
+    func testPapiColorsArraySize() {
+        let location = GenericLocation()
+        #expect(location.papiColors.count == 4)
+    }
+
+    @Test("Initial PAPI values")
+    func testInitialPapiValues() {
+        let location = GenericLocation()
+        #expect(location.papiPosition == 0.5)
+        #expect(location.papiColors == [0, 0, 0, 0])
+    }
 }
 
 // MARK: - XGPSDataReader Tests
@@ -126,7 +175,7 @@ struct XGPSDataReaderTests {
         let reader = XGPSDataReader()
         let genericLocation = GenericLocation()
         let appSettings = AppSettings()
-        appSettings.useXPlane = true
+        appSettings.locationSource = .xPlane
 
         reader.genericLocation = genericLocation
         reader.appSettings = appSettings
@@ -143,7 +192,7 @@ struct XGPSDataReaderTests {
         // Altitude should be converted from meters to feet: 305 * 3.2808399 ≈ 1000.66
         #expect(reader.altitude > 1000.0 && reader.altitude < 1001.0)
 
-        // Generic location should also be updated when useXPlane is true
+        // Generic location should also be updated when locationSource is xPlane
         #expect(genericLocation.latitude == 37.7749)
         #expect(genericLocation.longitude == -122.4194)
     }
@@ -152,7 +201,7 @@ struct XGPSDataReaderTests {
     func testParseXGPSPacketZeroAltitude() {
         let reader = XGPSDataReader()
         let appSettings = AppSettings()
-        appSettings.useXPlane = true
+        appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
         let packetString = "XGPS,-122.4194,37.7749,0,0,0,0,0,0,0,0"
@@ -167,7 +216,7 @@ struct XGPSDataReaderTests {
     func testParseXGPSPacketNegativeCoordinates() {
         let reader = XGPSDataReader()
         let appSettings = AppSettings()
-        appSettings.useXPlane = true
+        appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
         // Southern hemisphere, Eastern hemisphere
@@ -184,7 +233,7 @@ struct XGPSDataReaderTests {
     func testRejectInvalidHeader() {
         let reader = XGPSDataReader()
         let appSettings = AppSettings()
-        appSettings.useXPlane = true
+        appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
         let packetString = "INVALID,-122.4194,37.7749,305.0,0,0,0,0,0,0,0"
@@ -204,7 +253,7 @@ struct XGPSDataReaderTests {
     func testRejectShortPacket() {
         let reader = XGPSDataReader()
         let appSettings = AppSettings()
-        appSettings.useXPlane = true
+        appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
         let packetString = "XGPS,123"
@@ -220,12 +269,12 @@ struct XGPSDataReaderTests {
         #expect(reader.longitude == previousLon)
     }
 
-    @Test("Do not update GenericLocation when useXPlane is false")
+    @Test("Do not update GenericLocation when location source is not X-Plane")
     func testDoNotUpdateWhenXPlaneDisabled() {
         let reader = XGPSDataReader()
         let genericLocation = GenericLocation()
         let appSettings = AppSettings()
-        appSettings.useXPlane = false  // Disabled
+        appSettings.locationSource = .internalGPS  // Not X-Plane
 
         reader.genericLocation = genericLocation
         reader.appSettings = appSettings
@@ -251,7 +300,7 @@ struct XGPSDataReaderTests {
     func testUpdateTimestamp() async {
         let reader = XGPSDataReader()
         let appSettings = AppSettings()
-        appSettings.useXPlane = true
+        appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
         let beforeTime = Date()
@@ -455,16 +504,19 @@ struct AppSettingsTests {
         // Clear UserDefaults and synchronize to ensure changes are persisted
         UserDefaults.standard.removeObject(forKey: "useXPlane")
         UserDefaults.standard.removeObject(forKey: "showDebugInfo")
+        UserDefaults.standard.removeObject(forKey: "locationSource")
         UserDefaults.standard.synchronize()
 
         let settings = AppSettings()
 
         #expect(settings.useXPlane == false)
         #expect(settings.showDebugInfo == false)
+        #expect(settings.locationSource == .internalGPS)
 
         // Clean up
         UserDefaults.standard.removeObject(forKey: "useXPlane")
         UserDefaults.standard.removeObject(forKey: "showDebugInfo")
+        UserDefaults.standard.removeObject(forKey: "locationSource")
     }
 
     @Test("useXPlane persists to UserDefaults")
@@ -531,6 +583,66 @@ struct AppSettingsTests {
         // Clean up
         UserDefaults.standard.removeObject(forKey: "useXPlane")
         UserDefaults.standard.removeObject(forKey: "showDebugInfo")
+    }
+
+    @Test("Visualization default value is glideSlope")
+    func testVisualizationDefaultValue() {
+        UserDefaults.standard.removeObject(forKey: "visualization")
+
+        let settings = AppSettings()
+
+        #expect(settings.visualization == .glideSlope)
+
+        // Clean up
+        UserDefaults.standard.removeObject(forKey: "visualization")
+    }
+
+    @Test("Visualization persists to UserDefaults")
+    func testVisualizationPersistence() {
+        UserDefaults.standard.removeObject(forKey: "visualization")
+
+        let settings = AppSettings()
+        settings.visualization = .papi
+
+        // Create a new instance to verify persistence
+        let newSettings = AppSettings()
+        #expect(newSettings.visualization == .papi)
+
+        // Clean up
+        UserDefaults.standard.removeObject(forKey: "visualization")
+    }
+
+    @Test("Visualization can be toggled between modes")
+    func testVisualizationToggle() {
+        UserDefaults.standard.removeObject(forKey: "visualization")
+
+        let settings = AppSettings()
+        #expect(settings.visualization == .glideSlope)
+
+        settings.visualization = .papi
+        #expect(settings.visualization == .papi)
+        #expect(UserDefaults.standard.string(forKey: "visualization") == "PAPI")
+
+        settings.visualization = .glideSlope
+        #expect(settings.visualization == .glideSlope)
+        #expect(UserDefaults.standard.string(forKey: "visualization") == "Glide Slope")
+
+        // Clean up
+        UserDefaults.standard.removeObject(forKey: "visualization")
+    }
+
+    @Test("VisualizationType enum has correct raw values")
+    func testVisualizationTypeRawValues() {
+        #expect(VisualizationType.glideSlope.rawValue == "Glide Slope")
+        #expect(VisualizationType.papi.rawValue == "PAPI")
+    }
+
+    @Test("VisualizationType enum is CaseIterable")
+    func testVisualizationTypeCaseIterable() {
+        let allCases = VisualizationType.allCases
+        #expect(allCases.count == 2)
+        #expect(allCases.contains(.glideSlope))
+        #expect(allCases.contains(.papi))
     }
 }
 
