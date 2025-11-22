@@ -16,6 +16,13 @@ enum LocationSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum VisualizationType: String, CaseIterable, Identifiable {
+    case glideSlope = "Glide Slope"
+    case papi = "PAPI"
+
+    var id: String { rawValue }
+}
+
 class AppSettings: ObservableObject {
     @Published var locationSource: LocationSource {
         didSet {
@@ -41,6 +48,12 @@ class AppSettings: ObservableObject {
         }
     }
 
+    @Published var visualization: VisualizationType {
+        didSet {
+            UserDefaults.standard.set(visualization.rawValue, forKey: "visualization")
+        }
+    }
+
     init() {
         // Migrate from old useXPlane boolean if needed
         if let savedSource = UserDefaults.standard.string(forKey: "locationSource"),
@@ -60,6 +73,13 @@ class AppSettings: ObservableObject {
             ?? false
         self.favoriteAirports =
             UserDefaults.standard.stringArray(forKey: "favoriteAirports") ?? []
+
+        if let savedVisualization = UserDefaults.standard.string(forKey: "visualization"),
+           let visualizationType = VisualizationType(rawValue: savedVisualization) {
+            self.visualization = visualizationType
+        } else {
+            self.visualization = .glideSlope
+        }
     }
     
     // MARK: - Favorite Airports Management

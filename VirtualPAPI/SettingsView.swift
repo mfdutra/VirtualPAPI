@@ -14,7 +14,15 @@ struct SettingsView: View {
                     }
                 }
             }
-            
+
+            Section("Visualization") {
+                Picker("Type", selection: $settings.visualization) {
+                    ForEach(VisualizationType.allCases) { type in
+                        Text(type.rawValue).tag(type)
+                    }
+                }
+            }
+
             Section("Network") {
                 HStack {
                     Text("Local IP")

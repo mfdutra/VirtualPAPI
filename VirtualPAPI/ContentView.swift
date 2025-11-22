@@ -51,76 +51,34 @@ struct ContentView: View {
                     }
                     .padding(.vertical, 8)
 
-                    GeometryReader { geometry in
-                        // Glide slope indicator
-                        ZStack {
-                            // Background
-                            Rectangle()
-                                .fill(Color(red: 0.8, green: 0.8, blue: 0.8))
-                                .padding(
-                                    .horizontal,
-                                    geometry.size.width / 2 - 50
-                                )
-
-                            // Center line
-                            Rectangle()
-                                .fill(Color.white)
-                                .frame(width: 100, height: 5)
-
-                            // 3rd markers
-                            Circle()
-                                .stroke(Color.white, lineWidth: 2)
-                                .frame(width: 40)
-                                .offset(y: geometry.size.height * 0.33333)
-                            Circle()
-                                .stroke(Color.white, lineWidth: 2)
-                                .frame(width: 40)
-                                .offset(y: geometry.size.height * 0.16666)
-                            Circle()
-                                .stroke(Color.white, lineWidth: 2)
-                                .frame(width: 40)
-                                .offset(y: geometry.size.height * -0.33333)
-                            Circle()
-                                .stroke(Color.white, lineWidth: 2)
-                                .frame(width: 40)
-                                .offset(y: geometry.size.height * -0.16666)
-
-                            // Glide path
-                            Rectangle()
-                                .stroke(Color.black, lineWidth: 2)
-                                .background(getLocationColor())
-                                .rotationEffect(Angle(degrees: 45))
-                                .frame(width: 65, height: 65)
-                                .opacity(0.9)
-                                .offset(
-                                    y: geometry.size.height
-                                        * genericLocation.gsOffset
-                                )
-                                .animation(
-                                    .linear(duration: 1),
-                                    value: genericLocation.gsOffset
-                                )
-
-                            // Descent angle
-                            Text(
-                                "GP: \(airportSelection.descentAngle, specifier: "%.1f")°\nTDZE: \(airportSelection.targetElevation ?? 0, specifier: "%.0f")"
-                            )
-                            .offset(x: 130)
-                            .foregroundColor(
-                                Color(red: 0.6, green: 0.6, blue: 0.6)
-                            )
-
+                    Group {
+                        switch appSettings.visualization {
+                        case .glideSlope:
+                            GlideSlopeView(locationColor: getLocationColor())
+                        case .papi:
+                            PapiView()
                         }
+                    }
+                    .onTapGesture(count: 2) {
+                        appSettings.visualization = appSettings.visualization == .glideSlope ? .papi : .glideSlope
                     }
                 } else {
                     VStack(spacing: 10) {
                         Spacer()
 
-                        Image(systemName: "airplane.circle")
-                            .font(.system(size: 60))
-                            .foregroundColor(.secondary)
-                        Text("Load a destination below")
-                            .foregroundColor(.secondary)
+                        NavigationLink(
+                            destination: AirportSelectionView()
+                        ) {
+                            VStack {
+                                Image(systemName: "airplane.circle")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(.secondary)
+                                Text("Load a destination")
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 5)
+                            }
+
+                        }
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 60))
                             .foregroundColor(.red)
@@ -180,12 +138,12 @@ struct ContentView: View {
 
                 HStack {
                     NavigationLink(
-                        "Destination",
+                        "🔎 Destination",
                         destination: AirportSelectionView()
                     )
                     .padding()
                     Spacer()
-                    NavigationLink("Settings", destination: SettingsView())
+                    NavigationLink("⚙️ Settings", destination: SettingsView())
                         .padding()
                 }
 
@@ -237,8 +195,4 @@ struct ContentView: View {
         }
     }
 
-}
-
-#Preview {
-    ContentView()
 }

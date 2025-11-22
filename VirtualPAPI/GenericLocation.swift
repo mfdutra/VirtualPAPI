@@ -14,7 +14,10 @@ class GenericLocation: ObservableObject {
     @Published var altitude: Double = 0
     @Published var distanceToDestination: Double = 0
     @Published var angleToDestination: Double = 0
+    @Published var angleDeviation: Double = 0
     @Published var gsOffset: Double = 0
+    @Published var papiPosition: Double = 0.5  // 2-reds 2-whites
+    @Published var papiColors: [Double] = [0, 0, 0, 0]
     @Published var lastUpdateTime: Date?
     @Published var locationIsStale: Bool = false
 
@@ -46,6 +49,8 @@ class GenericLocation: ObservableObject {
         self.gsOffset = 0
         self.locationIsStale = true
         self.lastUpdateTime = nil
+        self.papiPosition = 0.5
+        self.papiColors = [0, 0, 0, 0]
     }
 
     /// Update the current location coordinates
@@ -64,7 +69,10 @@ class GenericLocation: ObservableObject {
     // Check location staleness every 5 seconds
     private func startStalenessCheck() {
         stalenessTimer?.invalidate()
-        stalenessTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) {
+        stalenessTimer = Timer.scheduledTimer(
+            withTimeInterval: 5.0,
+            repeats: true
+        ) {
             [weak self] _ in
             self?.checkStaleness()
         }
@@ -83,16 +91,16 @@ class GenericLocation: ObservableObject {
         }
     }
 
-    // Update distance to destination every second
+    // Update location information every second
     private func startDistanceCalculation() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
             [weak self] _ in
-            self?.updateDistanceToDestination()
+            self?.updateLocationInfo()
         }
     }
 
-    private func updateDistanceToDestination() {
+    private func updateLocationInfo() {
         // Skip if no airport/runway has been selected yet
         guard let airport = self.airportSelection else { return }
 
@@ -107,6 +115,7 @@ class GenericLocation: ObservableObject {
         )
         updateAngleToDestination()
         updateGSOffset()
+        updatePapiPosition()
     }
 
     private func updateAngleToDestination() {
@@ -114,16 +123,16 @@ class GenericLocation: ObservableObject {
         let altToLose = altitude - (self.airportSelection?.targetElevation)!
 
         self.angleToDestination = atan(altToLose / distanceInFeet) * 180 / .pi
+        self.angleDeviation =
+            self.angleToDestination - airportSelection!.descentAngle
     }
 
     private func updateGSOffset() {
-        let diff = self.angleToDestination - airportSelection!.descentAngle
-
         // Full scale deviation is 0.7 degrees
         // The GP indicator can only go up or down 45% of the screen
         // Divide the actual difference by 1.55 to move the
         // GP indicator in the correct proportion
-        var deviation = diff / 1.55555555555555555555
+        var deviation = self.angleDeviation / 1.55555555555555555555
 
         // Peg GP to top or bottom on the limits
         if deviation > 0.45 {
@@ -133,6 +142,21 @@ class GenericLocation: ObservableObject {
         }
 
         self.gsOffset = deviation
+    }
+
+    private func updatePapiPosition() {
+        // The PAPI is in the middle (0.5) when the angle deviation is 0,
+        // so shift +0.7 (max deflection)
+        //
+        // The PAPI position shifts ±0.5 while the deviation shifts ±0.7,
+        // so a factor of 1.4
+        self.papiPosition = max(0, min(1, (self.angleDeviation + 0.7) / 1.4))
+        self.papiColors = [
+            max(0, min(1, (self.papiPosition - 0.75) * 4)),
+            max(0, min(1, (self.papiPosition - 0.5) * 4)),
+            max(0, min(1, (self.papiPosition - 0.25) * 4)),
+            max(0, min(1, self.papiPosition * 4)),
+        ]
     }
 
     func distance(otherLatitude: Double, otherLongitude: Double) -> Double {
