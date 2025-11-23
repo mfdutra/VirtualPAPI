@@ -83,6 +83,9 @@ class DatabaseManager {
             FROM airports
             WHERE ident LIKE ?
             OR iata_code LIKE ?
+            OR local_code LIKE ?
+            OR gps_code LIKE ?
+            OR icao_code LIKE ?
             ORDER BY ident
             LIMIT 100
         """
@@ -93,6 +96,9 @@ class DatabaseManager {
             let searchPattern = "\(query)%"
             sqlite3_bind_text(statement, 1, (searchPattern as NSString).utf8String, -1, nil)
             sqlite3_bind_text(statement, 2, (searchPattern as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(statement, 3, (searchPattern as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(statement, 4, (searchPattern as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(statement, 5, (searchPattern as NSString).utf8String, -1, nil)
             
             while sqlite3_step(statement) == SQLITE_ROW {
                 let ident = String(cString: sqlite3_column_text(statement, 0))

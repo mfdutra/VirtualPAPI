@@ -4,9 +4,12 @@ Generate SQLite database from airports and runways CSV files.
 Data from https://ourairports.com/data/
 """
 
+import argparse
 import sqlite3
 import csv
 import os
+
+global args
 
 
 def create_database(db_path='aviation.db'):
@@ -29,7 +32,10 @@ def create_database(db_path='aviation.db'):
             iata_code TEXT,
             latitude_deg REAL,
             longitude_deg REAL,
-            elevation_ft INTEGER
+            elevation_ft INTEGER,
+            local_code TEXT,
+            gps_code TEXT,
+            icao_code TEXT
         )
     ''')
     print("Created airports table")
@@ -53,7 +59,7 @@ def create_database(db_path='aviation.db'):
 
     # Load airports data
     print("Loading airports data...")
-    with open('airports.csv', 'r', encoding='utf-8') as f:
+    with open(args.airports, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         airports_data = []
         for row in reader:
@@ -64,16 +70,19 @@ def create_database(db_path='aviation.db'):
                 float(row['latitude_deg']) if row['latitude_deg'] else None,
                 float(row['longitude_deg']) if row['longitude_deg'] else None,
                 int(row['elevation_ft']) if row['elevation_ft'] else None,
+                row['local_code'] if row['local_code'] else None,
+                row['gps_code'] if row['gps_code'] else None,
+                row['icao_code'] if row['icao_code'] else None,
             ))
 
         cursor.executemany('''
-            INSERT INTO airports VALUES (?,?,?,?,?,?)
+            INSERT INTO airports VALUES (?,?,?,?,?,?,?,?,?)
         ''', airports_data)
         print(f"Loaded {len(airports_data)} airports")
 
     # Load runways data
     print("Loading runways data...")
-    with open('runways.csv', 'r', encoding='utf-8') as f:
+    with open(args.runways, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             # Add one row for each side of the runway
@@ -135,6 +144,10 @@ def create_database(db_path='aviation.db'):
     cursor.execute(
         'CREATE INDEX idx_runways_airport_ident ON runways(airport_ident)')
 
+    for col in ['iata_code', 'local_code', 'gps_code', 'icao_code']:
+        cursor.execute(
+            f'CREATE INDEX idx_airports_{col} ON airports({col})')
+
     # Remove airports without associated runways
     print("Removing airports without runways...")
     cursor.execute('''
@@ -161,5 +174,14 @@ def create_database(db_path='aviation.db'):
     conn.close()
 
 
+def get_args():
+    parser = argparse.ArgumentParser(
+        description="Generate SQLite database from airports and runways CSV files.")
+    parser.add_argument('airports', help='Path to airports CSV file')
+    parser.add_argument('runways', help='Path to runways CSV file')
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
+    args = get_args()
     create_database()
