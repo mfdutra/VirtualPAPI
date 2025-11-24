@@ -21,33 +21,41 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 5) {
                 if let selectedAirport = airportSelection.selectedAirport,
-                    airportSelection.selectedRunway != nil
+                    let selectedRunway = airportSelection.selectedRunway
                 {
-                    HStack {
-                        Text("DST")
-                        Text(selectedAirport.ident)
+                    VStack {
+                        HStack {
+                            Text(
+                                "\(selectedAirport.ident) \(selectedRunway.ident)"
+                            )
+                            .font(.title2)
+                            if let bearing = genericLocation
+                                .relativeBearingToDestination,
+                                !genericLocation.locationIsStale
+                            {
+                                Image(systemName: "arrow.up")
+                                    .font(.title2)
+                                    .rotationEffect(Angle(degrees: bearing))
+                                    .animation(
+                                        .linear(duration: 1),
+                                        value: bearing
+                                    )
+                            }
+                        }
+                        HStack {
+                            Text("DTG")
+                            Text(
+                                "\(genericLocation.distanceToDestination, specifier: "%.1f")"
+                            )
                             .foregroundColor(getLocationColor())
                             .bold()
-                        if let runway = airportSelection.selectedRunway {
-                            Text("RWY")
-                            Text(runway.ident)
-                                .foregroundColor(
-                                    getLocationColor()
-                                )
-                                .bold()
+                            Text("ANG")
+                            Text(
+                                "\(genericLocation.angleToDestination, specifier: "%.1f")"
+                            )
+                            .foregroundColor(getLocationColor())
+                            .bold()
                         }
-                        Text("DTG")
-                        Text(
-                            "\(genericLocation.distanceToDestination, specifier: "%.1f")"
-                        )
-                        .foregroundColor(getLocationColor())
-                        .bold()
-                        Text("ANG")
-                        Text(
-                            "\(genericLocation.angleToDestination, specifier: "%.1f")"
-                        )
-                        .foregroundColor(getLocationColor())
-                        .bold()
                     }
                     .padding(.vertical, 8)
 
@@ -60,7 +68,9 @@ struct ContentView: View {
                         }
                     }
                     .onTapGesture(count: 2) {
-                        appSettings.visualization = appSettings.visualization == .glideSlope ? .papi : .glideSlope
+                        appSettings.visualization =
+                            appSettings.visualization == .glideSlope
+                            ? .papi : .glideSlope
                     }
                 } else {
                     VStack(spacing: 10) {
@@ -149,7 +159,7 @@ struct ContentView: View {
 
                 if appSettings.showDebugInfo {
                     Text(
-                        "Lat: \(genericLocation.latitude, specifier: "%.3f") Lon: \(genericLocation.longitude, specifier: "%.3f") Alt: \(genericLocation.altitude, specifier: "%.0f")"
+                        "Lat: \(genericLocation.latitude, specifier: "%.3f") Lon: \(genericLocation.longitude, specifier: "%.3f") Alt: \(genericLocation.altitude, specifier: "%.0f") GS: \(genericLocation.groundSpeed ?? 0, specifier: "%.0f") TRK: \(genericLocation.track ?? 0, specifier: "%.0f")"
                     )
                     .foregroundColor(.secondary)
 

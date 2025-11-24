@@ -22,7 +22,7 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
     var appSettings: AppSettings?
     var genericLocation: GenericLocation?
 
-    private let updateFrequency: TimeInterval = 0.1  // 10 times per second
+    private let updateFrequency: TimeInterval = 0.5  // 2 times per second
 
     override init() {
         super.init()

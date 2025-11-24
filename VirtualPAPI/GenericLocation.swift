@@ -13,6 +13,8 @@ class GenericLocation: ObservableObject {
     @Published var longitude: Double = 0
     @Published var altitude: Double = 0
     @Published var distanceToDestination: Double = 0
+    @Published var bearingToDestination: Double?
+    @Published var relativeBearingToDestination: Double?
     @Published var angleToDestination: Double = 0
     @Published var angleDeviation: Double = 0
     @Published var gsOffset: Double = 0
@@ -20,6 +22,12 @@ class GenericLocation: ObservableObject {
     @Published var papiColors: [Double] = [0, 0, 0, 0]
     @Published var lastUpdateTime: Date?
     @Published var locationIsStale: Bool = false
+    @Published var previousLatitude: Double?
+    @Published var previousLongitude: Double?
+    @Published var previousAltitude: Double?
+    @Published var previousUpdateTime: Date?
+    @Published var groundSpeed: Double?
+    @Published var track: Double?
 
     private var timer: Timer?
     private var stalenessTimer: Timer?
@@ -51,6 +59,13 @@ class GenericLocation: ObservableObject {
         self.lastUpdateTime = nil
         self.papiPosition = 0.5
         self.papiColors = [0, 0, 0, 0]
+        self.previousLatitude = nil
+        self.previousLongitude = nil
+        self.previousAltitude = nil
+        self.previousUpdateTime = nil
+        self.groundSpeed = nil
+        self.bearingToDestination = nil
+        self.relativeBearingToDestination = nil
     }
 
     /// Update the current location coordinates
@@ -59,11 +74,94 @@ class GenericLocation: ObservableObject {
     ///   - longitude: Longitude in degrees
     ///   - altitude: Altitude in feet
     func updateLocation(latitude: Double, longitude: Double, altitude: Double) {
+        self.previousLatitude = self.latitude
+        self.previousLongitude = self.longitude
+        self.previousAltitude = self.altitude
+        self.previousUpdateTime = self.lastUpdateTime
+
         self.latitude = latitude
         self.longitude = longitude
         self.altitude = altitude
         self.lastUpdateTime = Date()
         self.locationIsStale = false
+
+        updateMotionInfo()
+    }
+
+    private func updateMotionInfo() {
+        // Need valid previous position and time data
+        guard let prevLat = previousLatitude,
+            let prevLon = previousLongitude,
+            let prevTime = previousUpdateTime,
+            let currentTime = lastUpdateTime
+        else {
+            self.groundSpeed = nil
+            self.track = nil
+            return
+        }
+
+        // Calculate time elapsed in hours (for knots = nm/hr)
+        let timeElapsed = currentTime.timeIntervalSince(prevTime) / 3600.0
+
+        // Avoid division by zero
+        guard timeElapsed > 0 else {
+            self.groundSpeed = nil
+            self.track = nil
+            return
+        }
+
+        // Calculate distance traveled in nautical miles
+        let distanceTraveled = distance(
+            from: prevLat,
+            prevLon,
+            to: latitude,
+            longitude
+        )
+
+        // Ground speed in knots (nautical miles per hour)
+        self.groundSpeed = distanceTraveled / timeElapsed
+
+        // Calculate track (heading) from previous position to current position
+        self.track = heading(
+            from: prevLat,
+            prevLon,
+            to: latitude,
+            longitude
+        )
+    }
+
+    /// Calculate the heading (bearing) from one point to another
+    /// - Parameters:
+    ///   - lat1: Starting latitude in degrees
+    ///   - lon1: Starting longitude in degrees
+    ///   - lat2: Ending latitude in degrees
+    ///   - lon2: Ending longitude in degrees
+    /// - Returns: Heading in degrees (0-360), where 0 is North, 90 is East, etc.
+    func heading(
+        from lat1: Double,
+        _ lon1: Double,
+        to lat2: Double,
+        _ lon2: Double
+    ) -> Double {
+        // Convert to radians
+        let lat1Rad = lat1 * .pi / 180
+        let lat2Rad = lat2 * .pi / 180
+        let deltaLonRad = (lon2 - lon1) * .pi / 180
+
+        // Calculate bearing using forward azimuth formula
+        let y = sin(deltaLonRad) * cos(lat2Rad)
+        let x =
+            cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad)
+            * cos(deltaLonRad)
+
+        var heading = atan2(y, x) * 180 / .pi
+
+        // Normalize to 0-360 degrees
+        if heading < 0 {
+            heading += 360
+        }
+
+        return heading
     }
 
     // Check location staleness every 5 seconds
@@ -114,8 +212,37 @@ class GenericLocation: ObservableObject {
             otherLongitude: airport.targetLongitude!
         )
         updateAngleToDestination()
+        updateBearingToDestination()
         updateGSOffset()
         updatePapiPosition()
+    }
+
+    private func updateBearingToDestination() {
+        self.bearingToDestination = heading(
+            from: latitude,
+            longitude,
+            to: airportSelection!.targetLatitude!,
+            airportSelection!.targetLongitude!
+        )
+
+        // Calculate relative bearing (where destination is relative to current track)
+        if let currentTrack = self.track,
+            let bearing = self.bearingToDestination
+        {
+            var relativeBearing = bearing - currentTrack
+
+            // Normalize to -180 to +180 range
+            // Positive means turn right, negative means turn left
+            if relativeBearing > 180 {
+                relativeBearing -= 360
+            } else if relativeBearing < -180 {
+                relativeBearing += 360
+            }
+
+            self.relativeBearingToDestination = relativeBearing
+        } else {
+            self.relativeBearingToDestination = nil
+        }
     }
 
     private func updateAngleToDestination() {
