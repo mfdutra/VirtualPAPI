@@ -4,6 +4,10 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings
     @State var ipAddress: String = ""
+    @State private var databaseModifiedDate: Date?
+    @State private var isUpdating = false
+    @State private var updateMessage: String?
+    @State private var showError = false
 
     var body: some View {
         List {
@@ -32,6 +36,44 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Aviation Database") {
+                HStack {
+                    Text("Last Modified")
+                    Spacer()
+                    if let modifiedDate = databaseModifiedDate {
+                        Text(formatDate(modifiedDate))
+                            .foregroundColor(.secondary)
+                            .monospaced()
+                    } else {
+                        Text("Unknown")
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Button(action: {
+                    updateDatabase()
+                }) {
+                    HStack {
+                        if isUpdating {
+                            ProgressView()
+                                .padding(.trailing, 8)
+                        }
+                        Text(
+                            isUpdating
+                                ? "Checking for updates..."
+                                : "Check for Updates"
+                        )
+                    }
+                }
+                .disabled(isUpdating)
+
+                if let message = updateMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundColor(showError ? .red : .green)
+                }
+            }
+
             Section("Debug") {
                 Toggle("Show Debug Info", isOn: $settings.showDebugInfo)
 
@@ -45,6 +87,68 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .onAppear {
             getLocalIPAddress()
+            loadDatabaseModifiedDate()
+        }
+    }
+
+    private func loadDatabaseModifiedDate() {
+        let dbPath = getDatabasePath()
+
+        if let attributes = try? FileManager.default.attributesOfItem(
+            atPath: dbPath
+        ),
+            let modDate = attributes[.modificationDate] as? Date
+        {
+            databaseModifiedDate = modDate
+        }
+    }
+
+    private func getDatabasePath() -> String {
+        let paths = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        )
+        let documentsDirectory = paths[0]
+        return documentsDirectory.appendingPathComponent("aviation.db").path
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func updateDatabase() {
+        isUpdating = true
+        updateMessage = nil
+        showError = false
+
+        Task {
+            do {
+                let wasUpdated = try await DatabaseManager.shared
+                    .downloadRemoteDatabase()
+
+                await MainActor.run {
+                    if wasUpdated {
+                        updateMessage = "Database updated successfully"
+                        showError = false
+                        loadDatabaseModifiedDate()
+                    } else {
+                        updateMessage = "Database is already up-to-date"
+                        showError = false
+                    }
+                    isUpdating = false
+                }
+            } catch {
+                await MainActor.run {
+                    updateMessage =
+                        "Update failed: \(error.localizedDescription)"
+                    print("Update failed: \(error.localizedDescription)")
+                    showError = true
+                    isUpdating = false
+                }
+            }
         }
     }
 

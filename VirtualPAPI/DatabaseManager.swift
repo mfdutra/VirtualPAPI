@@ -119,6 +119,102 @@ class DatabaseManager {
         try fileManager.copyItem(atPath: sourcePath, toPath: destinationPath)
     }
 
+    // MARK: - Remote Database Download
+
+    /// Constructs the remote database URL (obfuscated)
+    private func getRemoteDatabaseURL() -> URL? {
+        let base = "https://mfdutra.com/"
+
+        let p1 = String("4oqY".reversed())
+        let p2 = "iibT"
+        let p3 = String("oZ2y".reversed())
+        let p4 = String("TeVz".reversed())
+        let p5 = "R9Tj"
+        let p6 = String("HdC9".reversed())
+        let p7 = "Kwmg"
+        let p8 = String("sZ5t".reversed())
+
+        let path = p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8
+        let urlString = base + path + "/aviation.db"
+
+        return URL(string: urlString)
+    }
+
+    /// Download the aviation database from remote server with ETag caching
+    /// - Returns: True if database was updated, false if already up-to-date
+    @discardableResult
+    func downloadRemoteDatabase() async throws -> Bool {
+        guard let url = getRemoteDatabaseURL() else {
+            throw DatabaseError.invalidURL
+        }
+
+        // Create request with cache policy that ignores local cache
+        var request = URLRequest(
+            url: url,
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
+        request.setValue("VirtualPAPI", forHTTPHeaderField: "User-Agent")
+
+        // Add ETag if we have one from previous download
+        let etagKey = "aviation_db_etag"
+        if let storedETag = UserDefaults.standard.string(forKey: etagKey) {
+            request.setValue(storedETag, forHTTPHeaderField: "If-None-Match")
+        }
+
+        // Create URLSession configuration that doesn't cache
+        let config = URLSessionConfiguration.default
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
+        let session = URLSession(configuration: config)
+
+        // Download
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw DatabaseError.invalidResponse
+        }
+
+        // Check if not modified
+        if httpResponse.statusCode == 304 {
+            print("Database is up-to-date")
+            return false
+        }
+
+        // Check for success
+        guard httpResponse.statusCode == 200 else {
+            throw DatabaseError.httpError(httpResponse.statusCode)
+        }
+
+        // Close the current database
+        closeDatabase()
+
+        // Write new database to Documents directory
+        let documentsPath = getDocumentsDatabasePath()
+        try data.write(to: URL(fileURLWithPath: documentsPath))
+
+        // Store the new ETag for future requests
+        if let newETag = httpResponse.value(forHTTPHeaderField: "ETag") {
+            UserDefaults.standard.set(newETag, forKey: etagKey)
+        }
+
+        // Store download timestamp
+        UserDefaults.standard.set(Date(), forKey: "last_database_download")
+
+        // Reopen the database
+        openDatabase()
+
+        print("Database updated successfully")
+        return true
+    }
+
+    // MARK: - Database Errors
+
+    enum DatabaseError: Error {
+        case invalidURL
+        case invalidResponse
+        case httpError(Int)
+    }
+
     private func openDatabase() {
         // Open database from Documents directory
         let dbPath = getDocumentsDatabasePath()
