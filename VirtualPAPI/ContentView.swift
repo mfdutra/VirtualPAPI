@@ -189,7 +189,7 @@ struct ContentView: View {
     }
 
     private func loadFavoriteAirport(_ airportIdent: String) {
-        let databaseManager = DatabaseManager()
+        let databaseManager = DatabaseManager.shared
         if let airport = databaseManager.getAirport(ident: airportIdent) {
             airportSelection.setAirport(airport)
             navigateToAirportSelection = true

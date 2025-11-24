@@ -18,7 +18,7 @@ struct AirportSelectionView: View {
     @State private var hasRestoredState = false
     @FocusState private var isSearchFieldFocused: Bool
 
-    private let databaseManager = DatabaseManager()
+    private let databaseManager = DatabaseManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
