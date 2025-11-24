@@ -154,6 +154,7 @@ class DatabaseManager {
             cachePolicy: .reloadIgnoringLocalCacheData
         )
         request.setValue("VirtualPAPI", forHTTPHeaderField: "User-Agent")
+        request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
 
         // Add ETag if we have one from previous download
         let etagKey = "aviation_db_etag"
