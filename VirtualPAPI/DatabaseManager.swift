@@ -5,8 +5,26 @@
 //  Created by Marlon Dutra on 11/15/25.
 //
 
+import CryptoKit
 import Foundation
 import SQLite3
+
+// MARK: - String Extension for Base32 Decoding
+
+extension String {
+    func leftPadding(toLength: Int, withPad character: Character) -> String {
+        let stringLength = self.count
+        if stringLength < toLength {
+            return String(
+                repeatElement(character, count: toLength - stringLength)
+            ) + self
+        } else {
+            return self
+        }
+    }
+}
+
+// MARK: - DatabaseManager
 
 class DatabaseManager {
     static let shared = DatabaseManager()
@@ -121,23 +139,108 @@ class DatabaseManager {
 
     // MARK: - Remote Database Download
 
-    /// Constructs the remote database URL (obfuscated)
+    /// Generates a TOTP (Time-Based One-Time Password) code
+    private func generateTOTP(secret: String, time: Date = Date()) -> String? {
+        // Decode base32 secret
+        guard let secretData = base32Decode(secret) else {
+            return nil
+        }
+
+        // Get time counter (Unix timestamp / 30)
+        let counter = UInt64(time.timeIntervalSince1970 / 30)
+
+        // Convert counter to big-endian bytes
+        var counterBytes = counter.bigEndian
+        let counterData = Data(
+            bytes: &counterBytes,
+            count: MemoryLayout<UInt64>.size
+        )
+
+        // Generate HMAC-SHA1
+        let key = SymmetricKey(data: secretData)
+        let hmac = HMAC<Insecure.SHA1>.authenticationCode(
+            for: counterData,
+            using: key
+        )
+
+        // Dynamic truncation
+        let hmacData = Data(hmac)
+        let offset = Int(hmacData[hmacData.count - 1] & 0x0f)
+
+        let truncatedHash = hmacData.subdata(in: offset..<offset + 4)
+        var number = truncatedHash.withUnsafeBytes {
+            $0.load(as: UInt32.self).bigEndian
+        }
+        number &= 0x7fff_ffff
+        number = number % 1_000_000
+
+        // Return 6-digit code
+        return String(format: "%06d", number)
+    }
+
+    /// Decode a base32 encoded string to Data
+    private func base32Decode(_ string: String) -> Data? {
+        let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+        var bits = ""
+
+        let cleanString = string.uppercased().replacingOccurrences(
+            of: "=",
+            with: ""
+        )
+
+        for char in cleanString {
+            guard let index = alphabet.firstIndex(of: char) else {
+                return nil
+            }
+            let value = alphabet.distance(from: alphabet.startIndex, to: index)
+            bits += String(value, radix: 2).leftPadding(
+                toLength: 5,
+                withPad: "0"
+            )
+        }
+
+        var data = Data()
+        var index = bits.startIndex
+
+        while bits.distance(from: index, to: bits.endIndex) >= 8 {
+            let endIndex = bits.index(index, offsetBy: 8)
+            let byteString = String(bits[index..<endIndex])
+            if let byte = UInt8(byteString, radix: 2) {
+                data.append(byte)
+            }
+            index = endIndex
+        }
+
+        return data
+    }
+
+    /// Constructs the remote database URL with TOTP authentication
+    ///
+    /// - Note: This function requires VirtualPAPI/Secrets.swift to be created locally.
+    ///   This file is excluded from version control via .gitignore.
+    ///   Create it with the following content:
+    ///   ```swift
+    ///   import Foundation
+    ///   enum Secrets {
+    ///       static let totpSecret = "YOUR_TOTP_SECRET_KEY"
+    ///   }
+    ///   ```
+    ///   Replace YOUR_TOTP_SECRET_KEY with the actual base32-encoded TOTP secret.
     private func getRemoteDatabaseURL() -> URL? {
-        let base = "https://mfdutra.com/"
+        guard let totp = generateTOTP(secret: Secrets.totpSecret) else {
+            print("Error: Failed to generate TOTP")
+            return nil
+        }
 
-        let p1 = String("4oqY".reversed())
-        let p2 = "iibT"
-        let p3 = String("oZ2y".reversed())
-        let p4 = String("TeVz".reversed())
-        let p5 = "R9Tj"
-        let p6 = String("HdC9".reversed())
-        let p7 = "Kwmg"
-        let p8 = String("sZ5t".reversed())
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "virtualpapi.net"
+        components.path = "/update-aviation-db"
+        components.queryItems = [
+            URLQueryItem(name: "totp", value: totp)
+        ]
 
-        let path = p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8
-        let urlString = base + path + "/aviation.db"
-
-        return URL(string: urlString)
+        return components.url
     }
 
     /// Download the aviation database from remote server with ETag caching

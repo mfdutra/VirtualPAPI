@@ -1,2 +1,5 @@
 VirtualPAPI.xcodeproj/xcuserdata
 VirtualPAPI.xcodeproj/project.xcworkspace/xcuserdata
+
+# Secrets - never commit credentials
+VirtualPAPI/Secrets.swift
