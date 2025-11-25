@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var genericLocation: GenericLocation
     @State var ipAddress: String = ""
     @State private var databaseModifiedDate: Date?
     @State private var tableCounts: (airports: Int, runways: Int)?
@@ -108,6 +109,11 @@ struct SettingsView: View {
                 NavigationLink(
                     "Generic location debug",
                     destination: GenericLocationDebugView()
+                )
+
+                NavigationLink(
+                    "Destination Map",
+                    destination: DestinationMapView()
                 )
             }
         }
@@ -230,4 +236,5 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
         .environmentObject(AppSettings())
+        .environmentObject(GenericLocation())
 }
