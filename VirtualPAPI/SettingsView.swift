@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings
     @State var ipAddress: String = ""
     @State private var databaseModifiedDate: Date?
+    @State private var tableCounts: (airports: Int, runways: Int)?
     @State private var isUpdating = false
     @State private var updateMessage: String?
     @State private var showError = false
@@ -50,6 +51,32 @@ struct SettingsView: View {
                     }
                 }
 
+                HStack {
+                    Text("Airports")
+                    Spacer()
+                    if let counts = tableCounts {
+                        Text("\(counts.airports)")
+                            .foregroundColor(.secondary)
+                            .monospaced()
+                    } else {
+                        Text("—")
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                HStack {
+                    Text("Runways")
+                    Spacer()
+                    if let counts = tableCounts {
+                        Text("\(counts.runways)")
+                            .foregroundColor(.secondary)
+                            .monospaced()
+                    } else {
+                        Text("—")
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 Button(action: {
                     updateDatabase()
                 }) {
@@ -88,6 +115,7 @@ struct SettingsView: View {
         .onAppear {
             getLocalIPAddress()
             loadDatabaseModifiedDate()
+            loadTableCounts()
         }
     }
 
@@ -101,6 +129,10 @@ struct SettingsView: View {
         {
             databaseModifiedDate = modDate
         }
+    }
+
+    private func loadTableCounts() {
+        tableCounts = DatabaseManager.shared.getTableRowCounts()
     }
 
     private func getDatabasePath() -> String {
@@ -134,6 +166,7 @@ struct SettingsView: View {
                         updateMessage = "Database updated successfully"
                         showError = false
                         loadDatabaseModifiedDate()
+                        loadTableCounts()
                     } else {
                         updateMessage = "Database is already up-to-date"
                         showError = false

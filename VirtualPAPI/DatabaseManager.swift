@@ -520,4 +520,38 @@ class DatabaseManager {
         sqlite3_finalize(statement)
         return runways
     }
+
+    // Get row counts for airports and runways tables
+    func getTableRowCounts() -> (airports: Int, runways: Int) {
+        var airportCount = 0
+        var runwayCount = 0
+
+        // Count airports
+        let airportQuery = "SELECT COUNT(*) FROM airports"
+        var statement: OpaquePointer?
+
+        if sqlite3_prepare_v2(db, airportQuery, -1, &statement, nil)
+            == SQLITE_OK
+        {
+            if sqlite3_step(statement) == SQLITE_ROW {
+                airportCount = Int(sqlite3_column_int(statement, 0))
+            }
+        }
+        sqlite3_finalize(statement)
+
+        // Count runways
+        let runwayQuery = "SELECT COUNT(*) FROM runways"
+        statement = nil
+
+        if sqlite3_prepare_v2(db, runwayQuery, -1, &statement, nil)
+            == SQLITE_OK
+        {
+            if sqlite3_step(statement) == SQLITE_ROW {
+                runwayCount = Int(sqlite3_column_int(statement, 0))
+            }
+        }
+        sqlite3_finalize(statement)
+
+        return (airports: airportCount, runways: runwayCount)
+    }
 }
