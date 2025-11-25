@@ -5,6 +5,96 @@ All notable changes to VirtualPAPI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2] - 2025-11-24
+
+### Added
+
+#### Remote Database Management
+- **Remote database updates**: Automatic aviation database downloads from https://virtualpapi.net
+- **TOTP authentication**: RFC 6238 compliant time-based one-time password security for update endpoint
+- **ETag caching**: HTTP ETag support to avoid unnecessary downloads (304 Not Modified handling)
+- **gzip compression**: Compressed database transfers for reduced bandwidth
+- **Manual update trigger**: "Check for Updates" button in Settings with real-time status feedback
+- **Database statistics**: Display airport and runway counts in Aviation Database section
+- **Modification date display**: Shows last database update timestamp in Settings
+
+#### Motion Tracking & Navigation
+- **Ground speed calculation**: Real-time ground speed in knots based on position changes
+- **Track calculation**: Current ground track in degrees
+- **Bearing calculations**: Absolute and relative bearings to destination
+- **Navigation debug view**: Comprehensive GenericLocationDebugView for monitoring location and motion data
+- **Color-coded display**: Navigation data formatted with proper units and visual indicators
+
+#### Airport Search Enhancements
+- **Extended search fields**: Now searches across ident, iata_code, local_code, gps_code, and icao_code
+- **Database indexes**: Performance optimization for faster search queries
+- **Flexible data import**: gen_sqlite.py accepts CSV file paths as command-line arguments
+
+### Changed
+
+#### Database Architecture
+- **Singleton pattern**: DatabaseManager converted to shared instance to prevent duplicate initialization
+- **Writable storage**: Database moved from app bundle to Documents directory for remote updates
+- **Automatic version checking**: Compares bundle and Documents database dates, updates if bundle is newer
+- **First-launch copy**: aviation.db automatically copied to Documents on initial app launch
+
+#### Code Organization
+- **Reusable heading function**: Extracted heading(from:to:) for navigation calculations
+- **Centralized motion updates**: New updateMotionInfo() method for ground speed and track
+- **Bearing updates**: updateBearingToDestination() calculates relative navigation angles
+
+### Security
+
+#### TOTP Implementation
+- **Base32 decoding**: Custom implementation for TOTP secret key processing
+- **HMAC-SHA1**: Cryptographic authentication code generation
+- **30-second time steps**: Standard TOTP time window
+- **Secrets.swift**: TOTP secret stored in gitignored file (not in version control)
+- **URL obfuscation**: Remote endpoint path protection (removed in TOTP update)
+
+### Technical Details
+
+#### Database Management
+- Database path: `~/Documents/aviation.db`
+- Version checking: Modification date comparison
+- Update flow: Close DB → Download → Write → Reopen
+- ETag storage: UserDefaults persistent cache
+- Download timestamp tracking
+
+#### Motion Calculations
+- Ground speed: Position delta / time delta (converted to knots)
+- Track: Bearing from previous position to current position
+- Update frequency: Calculated on each location update
+- Minimum delta: Prevents erratic calculations from GPS jitter
+
+#### TOTP Authentication
+- Algorithm: HMAC-SHA1
+- Digits: 6
+- Period: 30 seconds
+- Format: `?totp=XXXXXX` query parameter
+
+### Developer Notes
+
+#### Secrets Configuration
+Create `VirtualPAPI/Secrets.swift` (gitignored):
+```swift
+import Foundation
+enum Secrets {
+    static let totpSecret = "YOUR_TOTP_SECRET_KEY"
+}
+```
+
+#### Database Updates
+All views using DatabaseManager should now reference:
+```swift
+DatabaseManager.shared.getAirport(ident: "KJFK")
+DatabaseManager.shared.searchAirports(query: "JFK")
+DatabaseManager.shared.getRunways(forAirport: "KJFK")
+DatabaseManager.shared.getTableRowCounts()
+```
+
+---
+
 ## [1.1] - 2025-11-21
 
 ### Added
