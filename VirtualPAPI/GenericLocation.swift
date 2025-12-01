@@ -9,24 +9,20 @@ import Combine
 import Foundation
 
 class GenericLocation: ObservableObject {
-    @Published var latitude: Double = 0
-    @Published var longitude: Double = 0
     @Published var altitude: Double = 0
-    @Published var distanceToDestination: Double = 0
-    @Published var bearingToDestination: Double?
-    @Published var relativeBearingToDestination: Double?
-    @Published var angleToDestination: Double = 0
     @Published var angleDeviation: Double = 0
-    @Published var gsOffset: Double = 0
-    @Published var papiPosition: Double = 0.5  // 2-reds 2-whites
-    @Published var papiColors: [Double] = [0, 0, 0, 0]
-    @Published var lastUpdateTime: Date?
-    @Published var locationIsStale: Bool = false
-    @Published var previousLatitude: Double?
-    @Published var previousLongitude: Double?
-    @Published var previousAltitude: Double?
-    @Published var previousUpdateTime: Date?
+    @Published var angleToDestination: Double = 0
+    @Published var bearingToDestination: Double?
+    @Published var distanceToDestination: Double = 0
     @Published var groundSpeed: Double?
+    @Published var gsOffset: Double = 0
+    @Published var lastUpdateTime: Date?
+    @Published var latitude: Double = 0
+    @Published var locationIsStale: Bool = false
+    @Published var longitude: Double = 0
+    @Published var papiColors: [Double] = [0, 0, 0, 0]
+    @Published var papiPosition: Double = 0.5  // 2-reds 2-whites
+    @Published var relativeBearingToDestination: Double?
     @Published var track: Double?
 
     private var timer: Timer?
@@ -59,10 +55,6 @@ class GenericLocation: ObservableObject {
         self.lastUpdateTime = nil
         self.papiPosition = 0.5
         self.papiColors = [0, 0, 0, 0]
-        self.previousLatitude = nil
-        self.previousLongitude = nil
-        self.previousAltitude = nil
-        self.previousUpdateTime = nil
         self.groundSpeed = nil
         self.bearingToDestination = nil
         self.relativeBearingToDestination = nil
@@ -74,60 +66,34 @@ class GenericLocation: ObservableObject {
     ///   - longitude: Longitude in degrees
     ///   - altitude: Altitude in feet
     func updateLocation(latitude: Double, longitude: Double, altitude: Double) {
-        self.previousLatitude = self.latitude
-        self.previousLongitude = self.longitude
-        self.previousAltitude = self.altitude
-        self.previousUpdateTime = self.lastUpdateTime
-
         self.latitude = latitude
         self.longitude = longitude
         self.altitude = altitude
         self.lastUpdateTime = Date()
         self.locationIsStale = false
-
-        updateMotionInfo()
     }
 
-    private func updateMotionInfo() {
-        // Need valid previous position and time data
-        guard let prevLat = previousLatitude,
-            let prevLon = previousLongitude,
-            let prevTime = previousUpdateTime,
-            let currentTime = lastUpdateTime
-        else {
-            self.groundSpeed = nil
-            self.track = nil
-            return
-        }
-
-        // Calculate time elapsed in hours (for knots = nm/hr)
-        let timeElapsed = currentTime.timeIntervalSince(prevTime) / 3600.0
-
-        // Avoid division by zero
-        guard timeElapsed > 0 else {
-            self.groundSpeed = nil
-            self.track = nil
-            return
-        }
-
-        // Calculate distance traveled in nautical miles
-        let distanceTraveled = distance(
-            from: prevLat,
-            prevLon,
-            to: latitude,
-            longitude
-        )
-
-        // Ground speed in knots (nautical miles per hour)
-        self.groundSpeed = distanceTraveled / timeElapsed
-
-        // Calculate track (heading) from previous position to current position
-        self.track = heading(
-            from: prevLat,
-            prevLon,
-            to: latitude,
-            longitude
-        )
+    /// Update the current location coordinates with speed and track
+    /// - Parameters:
+    ///   - latitude: Latitude in degrees
+    ///   - longitude: Longitude in degrees
+    ///   - altitude: Altitude in feet
+    ///   - speed: Ground speed in knots (nil if invalid)
+    ///   - track: Track/course in degrees 0-360 (nil if invalid)
+    func updateLocation(
+        latitude: Double,
+        longitude: Double,
+        altitude: Double,
+        speed: Double?,
+        track: Double?
+    ) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+        self.groundSpeed = speed
+        self.track = track
+        self.lastUpdateTime = Date()
+        self.locationIsStale = false
     }
 
     /// Calculate the heading (bearing) from one point to another

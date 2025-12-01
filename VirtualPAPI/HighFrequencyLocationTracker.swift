@@ -16,6 +16,8 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
     @Published var currentLocation: CLLocationCoordinate2D?
     @Published var elevation: Double?
     @Published var accuracy: CLLocationAccuracy = 0
+    @Published var groundSpeed: Double?  // in knots
+    @Published var track: Double?  // course in degrees (0-360)
     @Published var isTracking = false
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
@@ -91,6 +93,22 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
             self.accuracy = location.horizontalAccuracy
             self.elevation = location.altitude
 
+            // Extract ground speed (convert m/s to knots)
+            // CLLocation speed is in m/s, negative if invalid
+            if location.speed >= 0 {
+                self.groundSpeed = location.speed * 1.9438445  // m/s to knots
+            } else {
+                self.groundSpeed = nil
+            }
+
+            // Extract track (course)
+            // CLLocation course is 0-360 degrees, negative if invalid
+            if location.course >= 0 {
+                self.track = location.course
+            } else {
+                self.track = nil
+            }
+
             // Only update genericLocation if using internal GPS
             if let appSettings = self.appSettings,
                 appSettings.locationSource == .internalGPS,
@@ -101,7 +119,9 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
                 genericLocation.updateLocation(
                     latitude: currentLocation.latitude,
                     longitude: currentLocation.longitude,
-                    altitude: elevation * 3.2808399  // meter to feet
+                    altitude: elevation * 3.2808399,  // meter to feet
+                    speed: self.groundSpeed,
+                    track: self.track
                 )
             }
         }

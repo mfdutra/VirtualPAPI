@@ -19,14 +19,16 @@ struct GenericLocationDebugView: View {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(
-                                genericLocation.locationIsStale ? Color.red : Color.green
+                                genericLocation.locationIsStale
+                                    ? Color.red : Color.green
                             )
                             .frame(width: 10, height: 10)
                         Text(
                             genericLocation.locationIsStale ? "Stale" : "Active"
                         )
                         .foregroundColor(
-                            genericLocation.locationIsStale ? .red : .green)
+                            genericLocation.locationIsStale ? .red : .green
+                        )
                     }
                 }
 
@@ -97,66 +99,15 @@ struct GenericLocationDebugView: View {
                 }
             }
 
-            Section("Previous Position") {
-                HStack {
-                    Text("Previous Latitude")
-                    Spacer()
-                    if let prevLat = genericLocation.previousLatitude {
-                        Text("\(prevLat, specifier: "%.6f")°")
-                            .foregroundColor(.secondary)
-                            .monospaced()
-                    } else {
-                        Text("—")
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                HStack {
-                    Text("Previous Longitude")
-                    Spacer()
-                    if let prevLon = genericLocation.previousLongitude {
-                        Text("\(prevLon, specifier: "%.6f")°")
-                            .foregroundColor(.secondary)
-                            .monospaced()
-                    } else {
-                        Text("—")
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                HStack {
-                    Text("Previous Altitude")
-                    Spacer()
-                    if let prevAlt = genericLocation.previousAltitude {
-                        Text("\(prevAlt, specifier: "%.0f") ft")
-                            .foregroundColor(.secondary)
-                            .monospaced()
-                    } else {
-                        Text("—")
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                HStack {
-                    Text("Previous Update")
-                    Spacer()
-                    if let prevTime = genericLocation.previousUpdateTime {
-                        Text(timeAgo(from: prevTime))
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text("—")
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-
             Section("Destination Data") {
                 HStack {
                     Text("Distance")
                     Spacer()
-                    Text("\(genericLocation.distanceToDestination, specifier: "%.2f") nm")
-                        .foregroundColor(.secondary)
-                        .monospaced()
+                    Text(
+                        "\(genericLocation.distanceToDestination, specifier: "%.2f") nm"
+                    )
+                    .foregroundColor(.secondary)
+                    .monospaced()
                 }
 
                 HStack {
@@ -175,13 +126,18 @@ struct GenericLocationDebugView: View {
                 HStack {
                     Text("Relative Bearing")
                     Spacer()
-                    if let relativeBearing = genericLocation.relativeBearingToDestination {
+                    if let relativeBearing = genericLocation
+                        .relativeBearingToDestination
+                    {
                         let color: Color =
                             abs(relativeBearing) < 5
-                            ? .green : (abs(relativeBearing) < 30 ? .orange : .red)
-                        Text("\(relativeBearing > 0 ? "+" : "")\(relativeBearing, specifier: "%.1f")°")
-                            .foregroundColor(color)
-                            .monospaced()
+                            ? .green
+                            : (abs(relativeBearing) < 30 ? .orange : .red)
+                        Text(
+                            "\(relativeBearing > 0 ? "+" : "")\(relativeBearing, specifier: "%.1f")°"
+                        )
+                        .foregroundColor(color)
+                        .monospaced()
                     } else {
                         Text("—")
                             .foregroundColor(.secondary)
@@ -191,9 +147,11 @@ struct GenericLocationDebugView: View {
                 HStack {
                     Text("Angle to Destination")
                     Spacer()
-                    Text("\(genericLocation.angleToDestination, specifier: "%.2f")°")
-                        .foregroundColor(.secondary)
-                        .monospaced()
+                    Text(
+                        "\(genericLocation.angleToDestination, specifier: "%.2f")°"
+                    )
+                    .foregroundColor(.secondary)
+                    .monospaced()
                 }
 
                 HStack {
@@ -201,10 +159,13 @@ struct GenericLocationDebugView: View {
                     Spacer()
                     let deviation = genericLocation.angleDeviation
                     let color: Color =
-                        abs(deviation) < 0.15 ? .green : (abs(deviation) < 0.45 ? .orange : .red)
-                    Text("\(deviation > 0 ? "+" : "")\(deviation, specifier: "%.2f")°")
-                        .foregroundColor(color)
-                        .monospaced()
+                        abs(deviation) < 0.15
+                        ? .green : (abs(deviation) < 0.45 ? .orange : .red)
+                    Text(
+                        "\(deviation > 0 ? "+" : "")\(deviation, specifier: "%.2f")°"
+                    )
+                    .foregroundColor(color)
+                    .monospaced()
                 }
             }
 
@@ -214,7 +175,8 @@ struct GenericLocationDebugView: View {
                     Spacer()
                     let offset = genericLocation.gsOffset
                     let color: Color =
-                        abs(offset) < 0.15 ? .green : (abs(offset) < 0.35 ? .orange : .red)
+                        abs(offset) < 0.15
+                        ? .green : (abs(offset) < 0.35 ? .orange : .red)
                     Text("\(offset > 0 ? "+" : "")\(offset, specifier: "%.3f")")
                         .foregroundColor(color)
                         .monospaced()
