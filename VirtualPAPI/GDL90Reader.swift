@@ -15,6 +15,8 @@ class GDL90Reader: ObservableObject {
     @Published var longitude: Double = 0.0
     @Published var altitude: Double = 0.0  // Pressure altitude from message 10
     @Published var geometricAltitude: Double = 0.0  // Geometric altitude from message 11
+    @Published var groundSpeed: Double = 0.0
+    @Published var track: Double = 0.0
     @Published var isConnected: Bool = false
     @Published var lastUpdateTime: Date = Date()
 
@@ -107,7 +109,10 @@ class GDL90Reader: ObservableObject {
         }
 
         // Schedule broadcasts every 5 seconds
-        broadcastTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        broadcastTimer = Timer.scheduledTimer(
+            withTimeInterval: 5.0,
+            repeats: true
+        ) { [weak self] _ in
             Task { @MainActor in
                 await self?.sendBroadcast()
             }
@@ -115,7 +120,8 @@ class GDL90Reader: ObservableObject {
     }
 
     private func sendBroadcast() async {
-        let jsonString = "{\"App\": \"VirtualPAPI\", \"GDL90\": {\"port\": 4000}}"
+        let jsonString =
+            "{\"App\": \"VirtualPAPI\", \"GDL90\": {\"port\": 4000}}"
         guard let data = jsonString.data(using: .utf8) else { return }
 
         // Create a UDP connection for broadcasting
@@ -141,7 +147,7 @@ class GDL90Reader: ObservableObject {
         connection.start(queue: queue)
 
         // Wait a bit for the send to complete, then cancel
-        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
         connection.cancel()
     }
 
@@ -167,14 +173,18 @@ class GDL90Reader: ObservableObject {
     private func updateGenericLocation(
         _ latitude: Double,
         _ longitude: Double,
-        _ altitude: Double
+        _ altitude: Double,
+        _ speed: Double?,
+        _ track: Double?
     ) {
         // Only update GenericLocation if GDL90 is the selected source
         if appSettings?.locationSource == .gdl90 {
             self.genericLocation?.updateLocation(
                 latitude: latitude,
                 longitude: longitude,
-                altitude: altitude
+                altitude: altitude,
+                speed: speed,
+                track: track
             )
         }
     }
@@ -323,12 +333,24 @@ class GDL90Reader: ObservableObject {
             (UInt16(message[11]) << 4) | ((UInt16(message[12]) & 0xF0) >> 4)
         let altitude = Double(altMetric) * 25.0 - 1000.0
 
+        // Bytes 14-15: Horizontal velocity (12-bit value, resolution 1 knot)
+        // Byte 14 = upper 8 bits, upper nibble of byte 15 = lower 4 bits
+        let velocityRaw =
+            (UInt16(message[14]) << 4) | ((UInt16(message[15]) & 0xF0) >> 4)
+        let speed: Double? = velocityRaw == 0xFFF ? nil : Double(velocityRaw)
+
+        // Byte 17: Track/heading (8-bit value, LSB = 360/256 = 1.40625 degrees)
+        let trackRaw = message[17]
+        let track: Double = Double(trackRaw) * (360.0 / 256.0)
+
         self.latitude = latitude
         self.longitude = longitude
         self.altitude = altitude
+        self.groundSpeed = speed ?? 0
+        self.track = track
         self.lastUpdateTime = Date()
 
-        updateGenericLocation(latitude, longitude, altitude)
+        updateGenericLocation(latitude, longitude, altitude, speed, track)
     }
 
     // Parse Message ID 11: Ownship Geometric Altitude

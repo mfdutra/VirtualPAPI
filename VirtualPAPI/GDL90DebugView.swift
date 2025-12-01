@@ -18,10 +18,18 @@ struct GDL90DebugView: View {
                     Spacer()
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(gdl90Reader.isConnected ? Color.green : Color.red)
+                            .fill(
+                                gdl90Reader.isConnected
+                                    ? Color.green : Color.red
+                            )
                             .frame(width: 10, height: 10)
-                        Text(gdl90Reader.isConnected ? "Connected" : "Disconnected")
-                            .foregroundColor(gdl90Reader.isConnected ? .green : .red)
+                        Text(
+                            gdl90Reader.isConnected
+                                ? "Connected" : "Disconnected"
+                        )
+                        .foregroundColor(
+                            gdl90Reader.isConnected ? .green : .red
+                        )
                     }
                 }
 
@@ -57,23 +65,43 @@ struct GDL90DebugView: View {
                         .foregroundColor(.secondary)
                         .monospaced()
                 }
+                HStack {
+                    Text("Speed")
+                    Spacer()
+                    Text("\(gdl90Reader.groundSpeed, specifier: "%.0f") kt")
+                        .foregroundColor(.secondary)
+                        .monospaced()
+                }
+                HStack {
+                    Text("Heading")
+                    Spacer()
+                    Text("\(gdl90Reader.track, specifier: "%.0f")°")
+                        .foregroundColor(.secondary)
+                        .monospaced()
+                }
             }
 
             Section("Altitude (Message 11)") {
                 HStack {
                     Text("Geometric Altitude")
                     Spacer()
-                    Text("\(gdl90Reader.geometricAltitude, specifier: "%.0f") ft")
-                        .foregroundColor(.secondary)
-                        .monospaced()
+                    Text(
+                        "\(gdl90Reader.geometricAltitude, specifier: "%.0f") ft"
+                    )
+                    .foregroundColor(.secondary)
+                    .monospaced()
                 }
 
                 HStack {
                     Text("Altitude Difference")
                     Spacer()
-                    let diff = gdl90Reader.geometricAltitude - gdl90Reader.altitude
+                    let diff =
+                        gdl90Reader.geometricAltitude - gdl90Reader.altitude
                     Text("\(diff > 0 ? "+" : "")\(diff, specifier: "%.0f") ft")
-                        .foregroundColor(diff > 0 ? .green : (diff < 0 ? .orange : .secondary))
+                        .foregroundColor(
+                            diff > 0
+                                ? .green : (diff < 0 ? .orange : .secondary)
+                        )
                         .monospaced()
                 }
             }
