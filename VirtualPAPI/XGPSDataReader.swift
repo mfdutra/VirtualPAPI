@@ -7,6 +7,8 @@ class XGPSDataReader: ObservableObject {
     @Published var latitude: Double = 0.0
     @Published var longitude: Double = 0.0
     @Published var altitude: Double = 0.0
+    @Published var groundSpeed: Double = 0.0
+    @Published var track: Double = 0.0
     @Published var isConnected: Bool = false
     @Published var lastUpdateTime: Date = Date()
 
@@ -105,16 +107,24 @@ class XGPSDataReader: ObservableObject {
         }
     }
 
-    fileprivate func updateGenericLocation(_ latitude: Double, _ longitude: Double, _ altitude: Double) {
+    fileprivate func updateGenericLocation(
+        _ latitude: Double,
+        _ longitude: Double,
+        _ altitude: Double,
+        _ speed: Double,
+        _ track: Double
+    ) {
         if appSettings!.locationSource == .xPlane {
             self.genericLocation?.updateLocation(
                 latitude: latitude,
                 longitude: longitude,
-                altitude: altitude
+                altitude: altitude,
+                speed: speed,
+                track: track
             )
         }
     }
-    
+
     func processXGPSData(_ data: Data) {
         guard data.count >= 41 else { return }
 
@@ -127,12 +137,16 @@ class XGPSDataReader: ObservableObject {
         let longitude = Double(components?[1] ?? "") ?? 0
         let latitude = Double(components?[2] ?? "") ?? 0
         let altitude = (Double(components?[3] ?? "") ?? 0) * 3.2808399  // meter to feet
+        let track = Double(components?[4] ?? "") ?? 0
+        let speed = (Double(components?[5] ?? "") ?? 0) * 1.9438445  // m/s to knots
 
         self.latitude = latitude
         self.longitude = longitude
         self.altitude = altitude
+        self.groundSpeed = speed
+        self.track = track
         self.lastUpdateTime = Date()
 
-        updateGenericLocation(latitude, longitude, altitude)
+        updateGenericLocation(latitude, longitude, altitude, speed, track)
     }
 }
