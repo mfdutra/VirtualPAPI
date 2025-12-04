@@ -1,3 +1,8 @@
+---
+name: xcode-build
+description: Builds the VirtualPAPI iOS project using the latest iPad mini simulator with proper xcodebuild destination flags and commands
+---
+
 # Xcode Build Skill
 
 When building the VirtualPAPI Xcode project, ALWAYS use the latest iPad mini simulator.
