@@ -1,6 +1,6 @@
 ---
 name: xcode-build
-description: Builds the VirtualPAPI iOS project using the latest iPad mini simulator with proper xcodebuild destination flags and commands
+description: Use when building, testing, or running xcodebuild commands for the VirtualPAPI iOS project. Always uses iPad mini (A17 Pro) simulator as the preferred test device with proper destination flags.
 ---
 
 # Xcode Build Skill
