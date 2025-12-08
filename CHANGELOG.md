@@ -5,6 +5,110 @@ All notable changes to VirtualPAPI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3] - 2025-12-07
+
+### Added
+
+#### Glide Slope Smoothing
+- **Configurable responsiveness**: Exponential Moving Average (EMA) filtering for glide slope indicator
+- **Adjustable alpha values**: Smooth (0.2), Medium (0.5), Fast (0.8), or Instantaneous (1.0)
+- **Settings integration**: Responsiveness slider in Settings view
+- **Debug mode visualization**: Display both smoothed and raw glide slope indicators simultaneously
+- **Persistent preferences**: Smoothing setting saved to UserDefaults
+
+#### Navigation Enhancements
+- **GPS-provided ground speed**: Direct parsing from XGPS and GDL90 protocols (no longer calculated)
+- **GPS-provided track**: Direct parsing from XGPS and GDL90 protocols (no longer calculated)
+- **Heading calculation**: New `heading(from:to:)` method for bearing calculations
+- **Relative bearing**: Calculate where destination is relative to current track
+- **Bearing to destination**: Absolute bearing from current position to destination
+
+#### Visualization & Debugging
+- **Satellite map view**: DestinationMapView displays selected runway on satellite imagery
+- **Maximum zoom**: 500-meter distance view centered on aiming point
+- **Pin marker**: Visual indicator at calculated aiming point (includes displaced threshold)
+- **Debug access**: Map view accessible from Settings > Debug section
+- **Enhanced debug displays**: Updated GenericLocationDebugView with speed/track information
+
+#### Developer Tools
+- **RNAV approach simulator**: Python script (`simulate_flight.py`) for integration testing
+- **Waypoint-based flight**: Simulates aircraft following GPS waypoints
+- **UDP message generation**: Sends X-Plane-compatible XGPS packets every second
+- **Test data included**: Sample RNAV approach profiles for KHWD runway 28L
+- **No simulator required**: Enables testing without running full flight simulator
+
+#### Testing
+- **33 comprehensive unit tests**: Full coverage of new features since v1.2
+- **GenericLocation tests**: Heading calculations, speed/track updates, EMA smoothing (10 tests)
+- **XGPSDataReader tests**: Speed and track parsing with unit conversions (4 tests)
+- **AppSettings tests**: EMA alpha persistence and smoothing levels (4 tests)
+- **DatabaseManager tests**: Airport search and table row counts (7 tests)
+- **String extension tests**: Left padding utility for base32 decoding (6 tests)
+- **Thread safety**: Serialized test execution to prevent SQLite concurrency issues
+
+### Changed
+
+#### Location Data Processing
+- **XGPS protocol parsing**: Now extracts track (component 4) and speed (component 5) from packets
+- **GDL90 protocol parsing**: Parses Message ID 10 for horizontal velocity and track
+- **Unit conversions**: Speed converted from m/s to knots (×1.9438445)
+- **Track encoding**: GDL90 track decoded with 1.40625° resolution (360/256)
+- **Invalid speed handling**: GDL90 velocity 0xFFF indicates invalid/unavailable speed
+- **Location update signature**: Added optional `speed` and `track` parameters to `updateLocation()`
+
+#### User Interface
+- **Responsiveness control**: New slider in Settings for EMA alpha adjustment
+- **Visual feedback**: Smooth/Medium/Fast/Instantaneous labels for smoothing levels
+- **Debug mode enhancement**: Dual glide slope indicators when debug info enabled
+- **Settings organization**: Debug views grouped in dedicated section
+
+#### Code Organization
+- **Reusable navigation functions**: Extracted `heading()` method for bearing calculations
+- **Bearing updates**: New `updateBearingToDestination()` method
+- **Relative bearing calculation**: Normalized to ±180° range for intuitive display
+- **Smooth glide slope tracking**: Separate `smoothedAngleDeviation` and `smoothedGsOffset` properties
+
+### Technical Details
+
+#### EMA Smoothing Algorithm
+- **Formula**: `EMA_new = alpha × current + (1 - alpha) × EMA_previous`
+- **Alpha range**: 0.2 (highly smoothed) to 1.0 (no smoothing/instantaneous)
+- **Application**: Applied to angle deviation before display offset calculation
+- **Initialization**: First value used directly, subsequent values smoothed
+- **Debug output**: Console logging of both raw and smoothed deviation values
+
+#### Protocol Parsing Details
+
+**XGPS Format:**
+- Track: Component 4 (degrees, 0-360)
+- Speed: Component 5 (m/s, converted to knots)
+- Conversion factor: 1.9438445 (m/s to knots)
+
+**GDL90 Format:**
+- Track: Byte 17, LSB = 1.40625° (360/256)
+- Speed: Bytes 14-15 (12-bit), 1 knot resolution
+- Invalid speed: 0xFFF indicates no valid data
+- Message structure: Ownship Report (Message ID 10)
+
+#### Navigation Calculations
+- **Heading method**: Uses forward azimuth formula on WGS84 ellipsoid
+- **Range**: Returns 0-360° where 0° is North, 90° is East
+- **Relative bearing**: `destination_bearing - current_track`, normalized to ±180°
+- **Positive values**: Turn right to reach destination
+- **Negative values**: Turn left to reach destination
+
+#### Test Coverage
+- **Serialization**: DatabaseManager and GenericLocation tests run serially to avoid SQLite threading issues
+- **MainActor isolation**: Async tests properly annotated for SwiftUI compatibility
+- **Mock data**: Realistic test scenarios with actual airport/runway coordinates
+- **Tolerance ranges**: Appropriate epsilon values for floating-point comparisons
+
+### Aviation Database Updates
+- Multiple database updates with latest airport and runway data from OurAirports.com
+- Enhanced search functionality tested with comprehensive test suite
+
+---
+
 ## [1.2] - 2025-11-24
 
 ### Added
