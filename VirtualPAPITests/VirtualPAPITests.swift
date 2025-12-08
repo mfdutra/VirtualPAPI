@@ -5,8 +5,9 @@
 //  Created by Marlon Dutra on 11/15/25.
 //
 
-import Testing
 import Foundation
+import Testing
+
 @testable import VirtualPAPI
 
 // MARK: - GenericLocation Tests
@@ -17,7 +18,12 @@ struct GenericLocationTests {
     @Test("Distance calculation using Vincenty formula - same point")
     func testDistanceSamePoint() {
         let location = GenericLocation()
-        let distance = location.distance(from: 37.7749, -122.4194, to: 37.7749, -122.4194)
+        let distance = location.distance(
+            from: 37.7749,
+            -122.4194,
+            to: 37.7749,
+            -122.4194
+        )
         #expect(distance == 0.0)
     }
 
@@ -26,7 +32,12 @@ struct GenericLocationTests {
         let location = GenericLocation()
         // SF: 37.7749° N, 122.4194° W
         // LA: 34.0522° N, 118.2437° W
-        let distance = location.distance(from: 37.7749, -122.4194, to: 34.0522, -118.2437)
+        let distance = location.distance(
+            from: 37.7749,
+            -122.4194,
+            to: 34.0522,
+            -118.2437
+        )
 
         // Expected distance is approximately 301 nautical miles
         #expect(distance > 300.0 && distance < 302.0)
@@ -37,7 +48,12 @@ struct GenericLocationTests {
         let location = GenericLocation()
         // NY: 40.7128° N, 74.0060° W
         // London: 51.5074° N, 0.1278° W
-        let distance = location.distance(from: 40.7128, -74.0060, to: 51.5074, -0.1278)
+        let distance = location.distance(
+            from: 40.7128,
+            -74.0060,
+            to: 51.5074,
+            -0.1278
+        )
 
         // Expected distance is approximately 3000 nautical miles
         #expect(distance > 2950.0 && distance < 3050.0)
@@ -72,7 +88,10 @@ struct GenericLocationTests {
         location.longitude = -122.4194
 
         // Distance to LA
-        let distance = location.distance(otherLatitude: 34.0522, otherLongitude: -118.2437)
+        let distance = location.distance(
+            otherLatitude: 34.0522,
+            otherLongitude: -118.2437
+        )
         #expect(distance > 301.0 && distance < 302)
     }
 
@@ -315,6 +334,104 @@ struct XGPSDataReaderTests {
 
         #expect(reader.lastUpdateTime > beforeTime)
     }
+
+    @Test("Parse XGPS packet with speed and track")
+    func testParseXGPSPacketWithSpeedAndTrack() {
+        let reader = XGPSDataReader()
+        let genericLocation = GenericLocation()
+        let appSettings = AppSettings()
+        appSettings.locationSource = .xPlane
+
+        reader.genericLocation = genericLocation
+        reader.appSettings = appSettings
+
+        // XGPS format: lon,lat,alt_meters,track_deg,speed_m/s,...
+        // Track: 90 degrees (east), Speed: 51.44 m/s (≈100 knots)
+        let packetString = "XGPS,-122.4194,37.7749,305.0,90.0,51.44,0,0,0,0,0"
+        let packetData = packetString.data(using: .ascii)!
+
+        reader.processXGPSData(packetData)
+
+        // Check track is parsed correctly
+        #expect(reader.track == 90.0)
+
+        // Check speed is converted from m/s to knots: 51.44 * 1.9438445 ≈ 100
+        #expect(reader.groundSpeed > 99.0 && reader.groundSpeed < 101.0)
+
+        // Check GenericLocation is also updated
+        #expect(genericLocation.track == 90.0)
+        #expect(
+            genericLocation.groundSpeed! > 99.0
+                && genericLocation.groundSpeed! < 101.0
+        )
+    }
+
+    @Test("Parse XGPS packet with zero speed")
+    func testParseXGPSPacketWithZeroSpeed() {
+        let reader = XGPSDataReader()
+        let appSettings = AppSettings()
+        appSettings.locationSource = .xPlane
+        reader.appSettings = appSettings
+
+        // Speed: 0 m/s
+        let packetString = "XGPS,-122.4194,37.7749,305.0,90.0,0,0,0,0,0,0"
+        let packetData = packetString.data(using: .ascii)!
+
+        reader.processXGPSData(packetData)
+
+        #expect(reader.groundSpeed == 0.0)
+        #expect(reader.track == 90.0)
+    }
+
+    @Test("Parse XGPS packet with various headings")
+    func testParseXGPSPacketWithVariousHeadings() {
+        let reader = XGPSDataReader()
+        let appSettings = AppSettings()
+        appSettings.locationSource = .xPlane
+        reader.appSettings = appSettings
+
+        // Test heading 0 (north)
+        var packetString = "XGPS,-122.4194,37.7749,305.0,0.0,0,0,0,0,0,0"
+        var packetData = packetString.data(using: .ascii)!
+        reader.processXGPSData(packetData)
+        #expect(reader.track == 0.0)
+
+        // Test heading 180 (south)
+        packetString = "XGPS,-122.4194,37.7749,305.0,180.0,0,0,0,0,0,0"
+        packetData = packetString.data(using: .ascii)!
+        reader.processXGPSData(packetData)
+        #expect(reader.track == 180.0)
+
+        // Test heading 270 (west)
+        packetString = "XGPS,-122.4194,37.7749,305.0,270.0,0,0,0,0,0,0"
+        packetData = packetString.data(using: .ascii)!
+        reader.processXGPSData(packetData)
+        #expect(reader.track == 270.0)
+
+        // Test heading 359.5 (almost north)
+        packetString = "XGPS,-122.4194,37.7749,305.0,359.5,0,0,0,0,0,0"
+        packetData = packetString.data(using: .ascii)!
+        reader.processXGPSData(packetData)
+        #expect(reader.track == 359.5)
+    }
+
+    @Test("Parse XGPS packet with high speed")
+    func testParseXGPSPacketWithHighSpeed() {
+        let reader = XGPSDataReader()
+        let appSettings = AppSettings()
+        appSettings.locationSource = .xPlane
+        reader.appSettings = appSettings
+
+        // Speed: 257.22 m/s (≈500 knots, typical jet cruise speed)
+        let packetString =
+            "XGPS,-122.4194,37.7749,10668.0,90.0,257.22,0,0,0,0,0"
+        let packetData = packetString.data(using: .ascii)!
+
+        reader.processXGPSData(packetData)
+
+        // Check speed conversion: 257.22 * 1.9438445 ≈ 500
+        #expect(reader.groundSpeed > 499.0 && reader.groundSpeed < 501.0)
+    }
 }
 
 // MARK: - AirportSelection Tests
@@ -326,15 +443,37 @@ struct AirportSelectionTests {
     func testSetAirportClearsRunway() {
         let selection = AirportSelection()
 
-        let airport1 = Airport(ident: "KSFO", name: "San Francisco", latitude_deg: 37.6213, longitude_deg: -122.3790, elevation_ft: 13)
-        let runway = Runway(airport_ident: "KSFO", ident: "28R", length_ft: 11870, width_ft: 200, latitude_deg: 37.6213, longitude_deg: -122.3790, elevation_ft: 13, heading_degT: 280, displaced_threshold_ft: 0)
+        let airport1 = Airport(
+            ident: "KSFO",
+            name: "San Francisco",
+            latitude_deg: 37.6213,
+            longitude_deg: -122.3790,
+            elevation_ft: 13
+        )
+        let runway = Runway(
+            airport_ident: "KSFO",
+            ident: "28R",
+            length_ft: 11870,
+            width_ft: 200,
+            latitude_deg: 37.6213,
+            longitude_deg: -122.3790,
+            elevation_ft: 13,
+            heading_degT: 280,
+            displaced_threshold_ft: 0
+        )
 
         selection.setAirport(airport1)
         selection.setRunway(runway)
 
         #expect(selection.selectedRunway != nil)
 
-        let airport2 = Airport(ident: "KLAX", name: "Los Angeles", latitude_deg: 33.9425, longitude_deg: -118.4081, elevation_ft: 125)
+        let airport2 = Airport(
+            ident: "KLAX",
+            name: "Los Angeles",
+            latitude_deg: 33.9425,
+            longitude_deg: -118.4081,
+            elevation_ft: 125
+        )
         selection.setAirport(airport2)
 
         #expect(selection.selectedRunway == nil)
@@ -346,7 +485,13 @@ struct AirportSelectionTests {
         let selection = AirportSelection()
         selection.descentAngle = 5.0
 
-        let airport = Airport(ident: "KSFO", name: "San Francisco", latitude_deg: 37.6213, longitude_deg: -122.3790, elevation_ft: 13)
+        let airport = Airport(
+            ident: "KSFO",
+            name: "San Francisco",
+            latitude_deg: 37.6213,
+            longitude_deg: -122.3790,
+            elevation_ft: 13
+        )
         selection.setAirport(airport)
 
         #expect(selection.descentAngle == 3.0)
@@ -356,8 +501,24 @@ struct AirportSelectionTests {
     func testSetRunwayUpdatesTargets() {
         let selection = AirportSelection()
 
-        let airport = Airport(ident: "KSFO", name: "San Francisco", latitude_deg: 37.6213, longitude_deg: -122.3790, elevation_ft: 13)
-        let runway = Runway(airport_ident: "KSFO", ident: "28R", length_ft: 11870, width_ft: 200, latitude_deg: 37.6213, longitude_deg: -122.3790, elevation_ft: 13, heading_degT: 280, displaced_threshold_ft: 0)
+        let airport = Airport(
+            ident: "KSFO",
+            name: "San Francisco",
+            latitude_deg: 37.6213,
+            longitude_deg: -122.3790,
+            elevation_ft: 13
+        )
+        let runway = Runway(
+            airport_ident: "KSFO",
+            ident: "28R",
+            length_ft: 11870,
+            width_ft: 200,
+            latitude_deg: 37.6213,
+            longitude_deg: -122.3790,
+            elevation_ft: 13,
+            heading_degT: 280,
+            displaced_threshold_ft: 0
+        )
 
         selection.setAirport(airport)
         selection.setRunway(runway)
@@ -371,8 +532,24 @@ struct AirportSelectionTests {
     func testSetRunwayUsesRunwayElevation() {
         let selection = AirportSelection()
 
-        let airport = Airport(ident: "TEST", name: "Test Airport", latitude_deg: 37.0, longitude_deg: -122.0, elevation_ft: 100)
-        let runway = Runway(airport_ident: "TEST", ident: "18", length_ft: 10000, width_ft: 150, latitude_deg: 37.0, longitude_deg: -122.0, elevation_ft: 105, heading_degT: 180, displaced_threshold_ft: 0)
+        let airport = Airport(
+            ident: "TEST",
+            name: "Test Airport",
+            latitude_deg: 37.0,
+            longitude_deg: -122.0,
+            elevation_ft: 100
+        )
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "18",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.0,
+            longitude_deg: -122.0,
+            elevation_ft: 105,
+            heading_degT: 180,
+            displaced_threshold_ft: 0
+        )
 
         selection.setAirport(airport)
         selection.setRunway(runway)
@@ -384,8 +561,24 @@ struct AirportSelectionTests {
     func testSetRunwayUsesAirportElevation() {
         let selection = AirportSelection()
 
-        let airport = Airport(ident: "TEST", name: "Test Airport", latitude_deg: 37.0, longitude_deg: -122.0, elevation_ft: 100)
-        let runway = Runway(airport_ident: "TEST", ident: "18", length_ft: 10000, width_ft: 150, latitude_deg: 37.0, longitude_deg: -122.0, elevation_ft: nil, heading_degT: 180, displaced_threshold_ft: 0)
+        let airport = Airport(
+            ident: "TEST",
+            name: "Test Airport",
+            latitude_deg: 37.0,
+            longitude_deg: -122.0,
+            elevation_ft: 100
+        )
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "18",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.0,
+            longitude_deg: -122.0,
+            elevation_ft: nil,
+            heading_degT: 180,
+            displaced_threshold_ft: 0
+        )
 
         selection.setAirport(airport)
         selection.setRunway(runway)
@@ -397,7 +590,17 @@ struct AirportSelectionTests {
     func testCalculateAimingPointNoDisplacement() {
         let selection = AirportSelection()
 
-        let runway = Runway(airport_ident: "TEST", ident: "18", length_ft: 10000, width_ft: 150, latitude_deg: 37.0, longitude_deg: -122.0, elevation_ft: 100, heading_degT: 180, displaced_threshold_ft: 0)
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "18",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.0,
+            longitude_deg: -122.0,
+            elevation_ft: 100,
+            heading_degT: 180,
+            displaced_threshold_ft: 0
+        )
 
         selection.selectedRunway = runway
         selection.aimingPoint = 0
@@ -413,7 +616,17 @@ struct AirportSelectionTests {
         let selection = AirportSelection()
 
         // Runway pointing north (heading 0)
-        let runway = Runway(airport_ident: "TEST", ident: "36", length_ft: 10000, width_ft: 150, latitude_deg: 37.0, longitude_deg: -122.0, elevation_ft: 100, heading_degT: 0, displaced_threshold_ft: 1000)
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "36",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.0,
+            longitude_deg: -122.0,
+            elevation_ft: 100,
+            heading_degT: 0,
+            displaced_threshold_ft: 1000
+        )
 
         selection.selectedRunway = runway
         selection.aimingPoint = 0
@@ -431,7 +644,17 @@ struct AirportSelectionTests {
         let selection = AirportSelection()
 
         // Runway pointing east (heading 90)
-        let runway = Runway(airport_ident: "TEST", ident: "09", length_ft: 10000, width_ft: 150, latitude_deg: 37.0, longitude_deg: -122.0, elevation_ft: 100, heading_degT: 90, displaced_threshold_ft: 0)
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "09",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.0,
+            longitude_deg: -122.0,
+            elevation_ft: 100,
+            heading_degT: 90,
+            displaced_threshold_ft: 0
+        )
 
         selection.selectedRunway = runway
         selection.aimingPoint = 500  // 500 feet down the runway
@@ -448,7 +671,17 @@ struct AirportSelectionTests {
     func testCalculateAimingPointNoHeading() {
         let selection = AirportSelection()
 
-        let runway = Runway(airport_ident: "TEST", ident: "18", length_ft: 10000, width_ft: 150, latitude_deg: 37.0, longitude_deg: -122.0, elevation_ft: 100, heading_degT: nil, displaced_threshold_ft: 1000)
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "18",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.0,
+            longitude_deg: -122.0,
+            elevation_ft: 100,
+            heading_degT: nil,
+            displaced_threshold_ft: 1000
+        )
 
         selection.selectedRunway = runway
         selection.aimingPoint = 500
@@ -464,8 +697,24 @@ struct AirportSelectionTests {
     func testClear() {
         let selection = AirportSelection()
 
-        let airport = Airport(ident: "KSFO", name: "San Francisco", latitude_deg: 37.6213, longitude_deg: -122.3790, elevation_ft: 13)
-        let runway = Runway(airport_ident: "KSFO", ident: "28R", length_ft: 11870, width_ft: 200, latitude_deg: 37.6213, longitude_deg: -122.3790, elevation_ft: 13, heading_degT: 280, displaced_threshold_ft: 0)
+        let airport = Airport(
+            ident: "KSFO",
+            name: "San Francisco",
+            latitude_deg: 37.6213,
+            longitude_deg: -122.3790,
+            elevation_ft: 13
+        )
+        let runway = Runway(
+            airport_ident: "KSFO",
+            ident: "28R",
+            length_ft: 11870,
+            width_ft: 200,
+            latitude_deg: 37.6213,
+            longitude_deg: -122.3790,
+            elevation_ft: 13,
+            heading_degT: 280,
+            displaced_threshold_ft: 0
+        )
 
         selection.setAirport(airport)
         selection.setRunway(runway)
@@ -494,6 +743,208 @@ struct AirportSelectionTests {
     }
 }
 
+// MARK: - GenericLocation Extended Tests
+
+@Suite("GenericLocation Extended Tests", .serialized)
+struct GenericLocationExtendedTests {
+
+    @Test("Update location with speed and track")
+    func testUpdateLocationWithSpeedAndTrack() {
+        let location = GenericLocation()
+
+        location.updateLocation(
+            latitude: 37.7749,
+            longitude: -122.4194,
+            altitude: 1000,
+            speed: 120.0,
+            track: 90.0
+        )
+
+        #expect(location.latitude == 37.7749)
+        #expect(location.longitude == -122.4194)
+        #expect(location.altitude == 1000)
+        #expect(location.groundSpeed == 120.0)
+        #expect(location.track == 90.0)
+        #expect(location.locationIsStale == false)
+        #expect(location.lastUpdateTime != nil)
+    }
+
+    @Test("Update location with nil speed and track")
+    func testUpdateLocationWithNilSpeedAndTrack() {
+        let location = GenericLocation()
+
+        location.updateLocation(
+            latitude: 37.7749,
+            longitude: -122.4194,
+            altitude: 1000,
+            speed: nil,
+            track: nil
+        )
+
+        #expect(location.latitude == 37.7749)
+        #expect(location.longitude == -122.4194)
+        #expect(location.altitude == 1000)
+        #expect(location.groundSpeed == nil)
+        #expect(location.track == nil)
+    }
+
+    @Test("Heading calculation - North")
+    func testHeadingNorth() {
+        let location = GenericLocation()
+
+        // From a point to a point directly north
+        let heading = location.heading(
+            from: 37.0,
+            -122.0,
+            to: 38.0,
+            -122.0
+        )
+
+        // Should be approximately 0° (due north)
+        #expect(heading >= 0 && heading <= 1)
+    }
+
+    @Test("Heading calculation - East")
+    func testHeadingEast() {
+        let location = GenericLocation()
+
+        // From a point to a point directly east
+        let heading = location.heading(
+            from: 37.0,
+            -122.0,
+            to: 37.0,
+            -121.0
+        )
+
+        // Should be approximately 90° (due east)
+        #expect(heading >= 89 && heading <= 91)
+    }
+
+    @Test("Heading calculation - South")
+    func testHeadingSouth() {
+        let location = GenericLocation()
+
+        // From a point to a point directly south
+        let heading = location.heading(
+            from: 38.0,
+            -122.0,
+            to: 37.0,
+            -122.0
+        )
+
+        // Should be approximately 180° (due south)
+        #expect(heading >= 179 && heading <= 181)
+    }
+
+    @Test("Heading calculation - West")
+    func testHeadingWest() {
+        let location = GenericLocation()
+
+        // From a point to a point directly west
+        let heading = location.heading(
+            from: 37.0,
+            -121.0,
+            to: 37.0,
+            -122.0
+        )
+
+        // Should be approximately 270° (due west)
+        #expect(heading >= 269 && heading <= 271)
+    }
+
+    @Test("Heading calculation - Same point")
+    func testHeadingSamePoint() {
+        let location = GenericLocation()
+
+        let heading = location.heading(
+            from: 37.0,
+            -122.0,
+            to: 37.0,
+            -122.0
+        )
+
+        // When points are the same, heading is 0
+        #expect(heading == 0.0)
+    }
+
+    @Test("Heading calculation - Across date line")
+    func testHeadingAcrossDateLine() {
+        let location = GenericLocation()
+
+        // From west of date line to east of date line
+        let heading = location.heading(
+            from: 0.0,
+            179.0,
+            to: 0.0,
+            -179.0
+        )
+
+        // Should be approximately 90° (eastward)
+        #expect(heading >= 80 && heading <= 100)
+    }
+
+    @Test("Smoothed glide slope offset calculation")
+    @MainActor
+    func testSmoothedGlideSlopeOffset() async {
+        let location = GenericLocation()
+        let settings = AppSettings()
+        let selection = AirportSelection()
+
+        settings.emaAlpha = 0.5  // 50% smoothing
+        location.appSettings = settings
+
+        // Setup a runway
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "18",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.7749,
+            longitude_deg: -122.4194,
+            elevation_ft: 100,
+            heading_degT: 180,
+            displaced_threshold_ft: 0
+        )
+
+        selection.selectedRunway = runway
+        selection.setTargets()
+        location.airportSelection = selection
+
+        // Set aircraft position significantly above glide slope
+        location.latitude = 37.8249
+        location.longitude = -122.4194
+        location.altitude = 1500  // High above glide slope
+
+        // Wait for timer
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        // Smoothed offset should exist and be different from raw offset
+        // Both should indicate above glide slope (positive values)
+        #expect(location.gsOffset > 0)
+        #expect(location.smoothedGsOffset > 0)
+    }
+
+    @Test("Reset clears speed and derived values")
+    func testResetClearsSpeedAndDerivedValues() {
+        let location = GenericLocation()
+
+        location.updateLocation(
+            latitude: 37.7749,
+            longitude: -122.4194,
+            altitude: 1000,
+            speed: 120.0,
+            track: 90.0
+        )
+
+        location.reset()
+
+        #expect(location.groundSpeed == nil)
+        #expect(location.bearingToDestination == nil)
+        #expect(location.relativeBearingToDestination == nil)
+        #expect(location.locationIsStale == true)
+    }
+}
+
 // MARK: - AppSettings Tests
 
 @Suite("AppSettings Tests", .serialized)
@@ -505,6 +956,7 @@ struct AppSettingsTests {
         UserDefaults.standard.removeObject(forKey: "useXPlane")
         UserDefaults.standard.removeObject(forKey: "showDebugInfo")
         UserDefaults.standard.removeObject(forKey: "locationSource")
+        UserDefaults.standard.removeObject(forKey: "emaAlpha")
         UserDefaults.standard.synchronize()
 
         let settings = AppSettings()
@@ -517,6 +969,7 @@ struct AppSettingsTests {
         UserDefaults.standard.removeObject(forKey: "useXPlane")
         UserDefaults.standard.removeObject(forKey: "showDebugInfo")
         UserDefaults.standard.removeObject(forKey: "locationSource")
+        UserDefaults.standard.removeObject(forKey: "emaAlpha")
     }
 
     @Test("useXPlane persists to UserDefaults")
@@ -625,7 +1078,10 @@ struct AppSettingsTests {
 
         settings.visualization = .glideSlope
         #expect(settings.visualization == .glideSlope)
-        #expect(UserDefaults.standard.string(forKey: "visualization") == "Glide Slope")
+        #expect(
+            UserDefaults.standard.string(forKey: "visualization")
+                == "Glide Slope"
+        )
 
         // Clean up
         UserDefaults.standard.removeObject(forKey: "visualization")
@@ -643,6 +1099,157 @@ struct AppSettingsTests {
         #expect(allCases.count == 2)
         #expect(allCases.contains(.glideSlope))
         #expect(allCases.contains(.papi))
+    }
+
+    @Test("Default EMA alpha value")
+    func testDefaultEmaAlpha() {
+        UserDefaults.standard.removeObject(forKey: "emaAlpha")
+
+        let settings = AppSettings()
+
+        #expect(settings.emaAlpha == 0.2)
+
+        // Clean up
+        UserDefaults.standard.removeObject(forKey: "emaAlpha")
+    }
+
+    @Test("EMA alpha persists to UserDefaults")
+    func testEmaAlphaPersistence() {
+        UserDefaults.standard.removeObject(forKey: "emaAlpha")
+
+        let settings = AppSettings()
+        settings.emaAlpha = 0.5
+
+        // Create a new instance to verify persistence
+        let newSettings = AppSettings()
+        #expect(newSettings.emaAlpha == 0.5)
+
+        // Clean up
+        UserDefaults.standard.removeObject(forKey: "emaAlpha")
+    }
+
+    @Test("EMA alpha can be set to various values")
+    func testEmaAlphaVariousValues() {
+        UserDefaults.standard.removeObject(forKey: "emaAlpha")
+
+        let settings = AppSettings()
+
+        // Test smooth (0.2)
+        settings.emaAlpha = 0.2
+        #expect(settings.emaAlpha == 0.2)
+        #expect(UserDefaults.standard.double(forKey: "emaAlpha") == 0.2)
+
+        // Test medium (0.5)
+        settings.emaAlpha = 0.5
+        #expect(settings.emaAlpha == 0.5)
+        #expect(UserDefaults.standard.double(forKey: "emaAlpha") == 0.5)
+
+        // Test fast (0.8)
+        settings.emaAlpha = 0.8
+        #expect(settings.emaAlpha == 0.8)
+        #expect(UserDefaults.standard.double(forKey: "emaAlpha") == 0.8)
+
+        // Test instantaneous (1.0)
+        settings.emaAlpha = 1.0
+        #expect(settings.emaAlpha == 1.0)
+        #expect(UserDefaults.standard.double(forKey: "emaAlpha") == 1.0)
+
+        // Clean up
+        UserDefaults.standard.removeObject(forKey: "emaAlpha")
+    }
+
+    @Test("Load existing EMA alpha from UserDefaults")
+    func testLoadExistingEmaAlpha() {
+        UserDefaults.standard.set(0.75, forKey: "emaAlpha")
+
+        let settings = AppSettings()
+
+        #expect(settings.emaAlpha == 0.75)
+
+        // Clean up
+        UserDefaults.standard.removeObject(forKey: "emaAlpha")
+    }
+}
+
+// MARK: - DatabaseManager Tests
+
+@Suite("DatabaseManager Tests", .serialized)
+struct DatabaseManagerTests {
+
+    @Test("Get table row counts")
+    func testGetTableRowCounts() {
+        let dbManager = DatabaseManager.shared
+        let (airportCount, runwayCount) = dbManager.getTableRowCounts()
+
+        // Database should have airports and runways
+        #expect(airportCount > 0)
+        #expect(runwayCount > 0)
+
+        // There should be more runways than airports
+        #expect(runwayCount > airportCount)
+    }
+
+    @Test("Search airports by identifier code")
+    func testSearchAirportsByIdentifierCode() {
+        let dbManager = DatabaseManager.shared
+
+        // Search only searches code fields (ident, iata_code, local_code, gps_code, icao_code)
+        // KSFO is the identifier for San Francisco International
+        let results = dbManager.searchAirports(query: "KSFO")
+
+        #expect(results.count > 0)
+        #expect(results.contains(where: { $0.ident == "KSFO" }))
+    }
+
+    @Test("Search airports with partial query")
+    func testSearchAirportsPartialQuery() {
+        let dbManager = DatabaseManager.shared
+
+        // Search for airports with codes starting with "KS"
+        let results = dbManager.searchAirports(query: "KS")
+
+        // Should return results (searches ident, iata_code, local_code, gps_code, icao_code)
+        #expect(results.count > 0)
+        // Results should be ordered by ident
+        if results.count > 1 {
+            #expect(results[0].ident <= results[1].ident)
+        }
+    }
+
+    @Test("Search airports with empty query returns all")
+    func testSearchAirportsEmptyQuery() {
+        let dbManager = DatabaseManager.shared
+
+        let results = dbManager.searchAirports(query: "")
+
+        // Empty query with pattern "%" matches all, limited to 100
+        #expect(results.count > 0)
+        #expect(results.count <= 100)
+    }
+
+    @Test("Search airports case insensitive")
+    func testSearchAirportsCaseInsensitive() {
+        let dbManager = DatabaseManager.shared
+
+        // Search with lowercase
+        let lowerResults = dbManager.searchAirports(query: "ksfo")
+        let upperResults = dbManager.searchAirports(query: "KSFO")
+
+        // Both should return results
+        #expect(lowerResults.count > 0)
+        #expect(upperResults.count > 0)
+
+        // Should return same results
+        #expect(lowerResults.count == upperResults.count)
+    }
+
+    @Test("Search airports non-existent returns empty")
+    func testSearchAirportsNonExistent() {
+        let dbManager = DatabaseManager.shared
+
+        let results = dbManager.searchAirports(query: "ZZZZZZZZ")
+
+        #expect(results.isEmpty)
     }
 }
 
