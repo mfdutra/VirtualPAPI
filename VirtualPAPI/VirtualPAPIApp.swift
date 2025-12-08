@@ -34,6 +34,7 @@ struct VirtualPAPIApp: App {
                     xgpsDataReader.appSettings = appSettings
                     gdl90Reader.genericLocation = genericLocation
                     gdl90Reader.appSettings = appSettings
+                    genericLocation.appSettings = appSettings
                     genericLocation.airportSelection = airportSelection
                     locationTracker.appSettings = appSettings
                     locationTracker.genericLocation = genericLocation
@@ -45,7 +46,9 @@ struct VirtualPAPIApp: App {
                     // Prevent screen from turning off
                     UIApplication.shared.isIdleTimerDisabled = true
                 }
-                .onChange(of: appSettings.locationSource) { oldValue, newValue in
+                .onChange(of: appSettings.locationSource) {
+                    oldValue,
+                    newValue in
                     stopListenerForSource(oldValue)
                     startListenerForSource(newValue)
                 }

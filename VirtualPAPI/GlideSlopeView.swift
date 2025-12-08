@@ -10,6 +10,7 @@ import SwiftUI
 struct GlideSlopeView: View {
     @EnvironmentObject var genericLocation: GenericLocation
     @EnvironmentObject var airportSelection: AirportSelection
+    @EnvironmentObject var appSettings: AppSettings
     let locationColor: Color
 
     var body: some View {
@@ -47,7 +48,7 @@ struct GlideSlopeView: View {
                     .frame(width: 40)
                     .offset(y: geometry.size.height * -0.16666)
 
-                // Glide path
+                // Smoothed glide path
                 Rectangle()
                     .stroke(Color.black, lineWidth: 2)
                     .background(locationColor)
@@ -56,12 +57,30 @@ struct GlideSlopeView: View {
                     .opacity(0.9)
                     .offset(
                         y: geometry.size.height
-                            * genericLocation.gsOffset
+                            * genericLocation.smoothedGsOffset
                     )
                     .animation(
                         .linear(duration: 1),
-                        value: genericLocation.gsOffset
+                        value: genericLocation.smoothedGsOffset
                     )
+
+                // Instantaneous glide path
+                if appSettings.showDebugInfo {
+                    Rectangle()
+                        .stroke(Color.black, lineWidth: 2)
+                        .background(.black)
+                        .rotationEffect(Angle(degrees: 45))
+                        .frame(width: 20, height: 20)
+                        .offset(
+                            y: geometry.size.height
+                                * genericLocation.gsOffset
+                        )
+                        .animation(
+                            .linear(duration: 1),
+                            value: genericLocation.gsOffset
+                        )
+                }
+
                 if genericLocation.locationIsStale {
                     Text("❌ INVALID ❌")
                         .font(.system(size: 60))

@@ -11,11 +11,13 @@ import Foundation
 class GenericLocation: ObservableObject {
     @Published var altitude: Double = 0
     @Published var angleDeviation: Double = 0
+    @Published var smoothedAngleDeviation: Double = 0
     @Published var angleToDestination: Double = 0
     @Published var bearingToDestination: Double?
     @Published var distanceToDestination: Double = 0
     @Published var groundSpeed: Double?
     @Published var gsOffset: Double = 0
+    @Published var smoothedGsOffset: Double = 0
     @Published var lastUpdateTime: Date?
     @Published var latitude: Double = 0
     @Published var locationIsStale: Bool = false
@@ -28,6 +30,8 @@ class GenericLocation: ObservableObject {
     private var timer: Timer?
     private var stalenessTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
+    private var isFirstAngleUpdate = true
+    weak var appSettings: AppSettings?
     var airportSelection: AirportSelection? {
         didSet {
             startDistanceCalculation()
@@ -50,7 +54,10 @@ class GenericLocation: ObservableObject {
         self.altitude = 0
         self.distanceToDestination = 0
         self.angleToDestination = 0
+        self.angleDeviation = 0
+        self.smoothedAngleDeviation = 0
         self.gsOffset = 0
+        self.smoothedGsOffset = 0
         self.locationIsStale = true
         self.lastUpdateTime = nil
         self.papiPosition = 0.5
@@ -58,6 +65,7 @@ class GenericLocation: ObservableObject {
         self.groundSpeed = nil
         self.bearingToDestination = nil
         self.relativeBearingToDestination = nil
+        self.isFirstAngleUpdate = true
     }
 
     /// Update the current location coordinates
@@ -218,6 +226,21 @@ class GenericLocation: ObservableObject {
         self.angleToDestination = atan(altToLose / distanceInFeet) * 180 / .pi
         self.angleDeviation =
             self.angleToDestination - airportSelection!.descentAngle
+
+        // Apply exponential moving average smoothing
+        if isFirstAngleUpdate {
+            // Initialize with first value
+            self.smoothedAngleDeviation = self.angleDeviation
+            isFirstAngleUpdate = false
+        } else {
+            // EMA formula: EMA_new = alpha * current + (1 - alpha) * EMA_previous
+            let alpha = appSettings?.emaAlpha ?? 0.2
+            self.smoothedAngleDeviation =
+                alpha * self.angleDeviation + (1 - alpha)
+                * self.smoothedAngleDeviation
+        }
+
+        print("Deviation: \(self.angleDeviation) Smoothed: \(self.smoothedAngleDeviation)")
     }
 
     private func updateGSOffset() {
@@ -225,16 +248,13 @@ class GenericLocation: ObservableObject {
         // The GP indicator can only go up or down 45% of the screen
         // Divide the actual difference by 1.55 to move the
         // GP indicator in the correct proportion
-        var deviation = self.angleDeviation / 1.55555555555555555555
+        let deviation = self.angleDeviation / 1.55555555555555555555
+        let smoothedDeviation =
+            self.smoothedAngleDeviation / 1.55555555555555555555
 
         // Peg GP to top or bottom on the limits
-        if deviation > 0.45 {
-            deviation = 0.45
-        } else if deviation < -0.45 {
-            deviation = -0.45
-        }
-
-        self.gsOffset = deviation
+        self.gsOffset = max(-0.45, min(0.45, deviation))
+        self.smoothedGsOffset = max(-0.45, min(0.45, smoothedDeviation))
     }
 
     private func updatePapiPosition() {

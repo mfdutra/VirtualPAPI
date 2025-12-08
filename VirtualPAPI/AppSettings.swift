@@ -26,7 +26,10 @@ enum VisualizationType: String, CaseIterable, Identifiable {
 class AppSettings: ObservableObject {
     @Published var locationSource: LocationSource {
         didSet {
-            UserDefaults.standard.set(locationSource.rawValue, forKey: "locationSource")
+            UserDefaults.standard.set(
+                locationSource.rawValue,
+                forKey: "locationSource"
+            )
         }
     }
 
@@ -44,22 +47,39 @@ class AppSettings: ObservableObject {
 
     @Published var favoriteAirports: [String] {
         didSet {
-            UserDefaults.standard.set(favoriteAirports, forKey: "favoriteAirports")
+            UserDefaults.standard.set(
+                favoriteAirports,
+                forKey: "favoriteAirports"
+            )
         }
     }
 
     @Published var visualization: VisualizationType {
         didSet {
-            UserDefaults.standard.set(visualization.rawValue, forKey: "visualization")
+            UserDefaults.standard.set(
+                visualization.rawValue,
+                forKey: "visualization"
+            )
+        }
+    }
+
+    @Published var emaAlpha: Double {
+        didSet {
+            UserDefaults.standard.set(emaAlpha, forKey: "emaAlpha")
         }
     }
 
     init() {
         // Migrate from old useXPlane boolean if needed
-        if let savedSource = UserDefaults.standard.string(forKey: "locationSource"),
-           let source = LocationSource(rawValue: savedSource) {
+        if let savedSource = UserDefaults.standard.string(
+            forKey: "locationSource"
+        ),
+            let source = LocationSource(rawValue: savedSource)
+        {
             self.locationSource = source
-        } else if UserDefaults.standard.object(forKey: "useXPlane") as? Bool == true {
+        } else if UserDefaults.standard.object(forKey: "useXPlane") as? Bool
+            == true
+        {
             // Migrate old setting
             self.locationSource = .xPlane
         } else {
@@ -74,31 +94,39 @@ class AppSettings: ObservableObject {
         self.favoriteAirports =
             UserDefaults.standard.stringArray(forKey: "favoriteAirports") ?? []
 
-        if let savedVisualization = UserDefaults.standard.string(forKey: "visualization"),
-           let visualizationType = VisualizationType(rawValue: savedVisualization) {
+        if let savedVisualization = UserDefaults.standard.string(
+            forKey: "visualization"
+        ),
+            let visualizationType = VisualizationType(
+                rawValue: savedVisualization
+            )
+        {
             self.visualization = visualizationType
         } else {
             self.visualization = .glideSlope
         }
+
+        self.emaAlpha =
+            UserDefaults.standard.object(forKey: "emaAlpha") as? Double ?? 0.2
     }
-    
+
     // MARK: - Favorite Airports Management
-    
+
     func addFavoriteAirport(_ airportCode: String) {
         let code = airportCode.uppercased().trimmingCharacters(in: .whitespaces)
         if !code.isEmpty && !favoriteAirports.contains(code) {
             favoriteAirports.append(code)
         }
     }
-    
+
     func removeFavoriteAirport(_ airportCode: String) {
         favoriteAirports.removeAll { $0 == airportCode }
     }
-    
+
     func isFavorite(_ airportCode: String) -> Bool {
         favoriteAirports.contains(airportCode.uppercased())
     }
-    
+
     func toggleFavorite(_ airportCode: String) {
         let code = airportCode.uppercased().trimmingCharacters(in: .whitespaces)
         if isFavorite(code) {

@@ -27,6 +27,13 @@ struct SettingsView: View {
                         Text(type.rawValue).tag(type)
                     }
                 }
+
+                Picker("Responsiveness", selection: $settings.emaAlpha) {
+                    Text("Smooth").tag(0.2)
+                    Text("Medium").tag(0.5)
+                    Text("Fast").tag(0.8)
+                    Text("Instantaneous").tag(1.0)
+                }
             }
 
             Section("Network") {
