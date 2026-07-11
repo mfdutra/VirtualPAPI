@@ -6,6 +6,7 @@
 //
 
 import Combine
+import Darwin
 import Foundation
 import Network
 
@@ -20,8 +21,8 @@ class GDL90Reader: ObservableObject {
     @Published var isConnected: Bool = false
     @Published var lastUpdateTime: Date = Date()
 
-    private var udpListener: NWListener?
-    private var udpConnection: NWConnection?
+    private var socketFD: Int32 = -1
+    private var receiveThread: Thread?
     private var broadcastTimer: Timer?
     private let queue = DispatchQueue(label: "gdl90-udp-queue")
 
@@ -29,77 +30,89 @@ class GDL90Reader: ObservableObject {
     var appSettings: AppSettings?
 
     deinit {
-        udpListener?.cancel()
-        udpConnection?.cancel()
+        if socketFD >= 0 {
+            close(socketFD)
+        }
         broadcastTimer?.invalidate()
-        udpListener = nil
-        udpConnection = nil
         broadcastTimer = nil
     }
 
     func startListening() {
-        let port = NWEndpoint.Port(4000)
-        let parameters = NWParameters.udp
-        parameters.allowLocalEndpointReuse = true
+        let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        guard fd >= 0 else {
+            print("GDL90: failed to create socket: \(String(cString: strerror(errno)))")
+            return
+        }
 
-        udpListener = try? NWListener(using: parameters, on: port)
+        // Never call connect() on this socket: a "connected" socket takes
+        // priority over other apps' plain listening sockets for matching
+        // packets, which would steal broadcast traffic from them.
+        var reuseAddr: Int32 = 1
+        setsockopt(
+            fd, SOL_SOCKET, SO_REUSEADDR, &reuseAddr,
+            socklen_t(MemoryLayout<Int32>.size))
+        var reusePort: Int32 = 1
+        setsockopt(
+            fd, SOL_SOCKET, SO_REUSEPORT, &reusePort,
+            socklen_t(MemoryLayout<Int32>.size))
 
-        udpListener?.newConnectionHandler = { [weak self] connection in
-            guard let self else { return }
-            Task { @MainActor in
-                self.udpConnection = connection
-                self.setupConnection(connection)
+        var addr = sockaddr_in()
+        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(4000).bigEndian
+        addr.sin_addr.s_addr = INADDR_ANY
+
+        let bindResult = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                bind(fd, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
 
-        udpListener?.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
-            Task { @MainActor in
-                switch state {
-                case .ready:
-                    self.isConnected = true
-                case .failed(let error):
-                    print("GDL90 listener failed: \(error)")
-                    self.isConnected = false
-                case .cancelled:
-                    self.isConnected = false
-                default:
-                    break
-                }
-            }
+        guard bindResult == 0 else {
+            print("GDL90: bind failed: \(String(cString: strerror(errno)))")
+            close(fd)
+            return
         }
 
-        udpListener?.start(queue: queue)
+        socketFD = fd
+        isConnected = true
+
+        let thread = Thread { [weak self] in
+            self?.receiveLoop(fd: fd)
+        }
+        thread.name = "gdl90-udp-receive"
+        thread.start()
+        receiveThread = thread
+
         startBroadcastHeartbeat()
     }
 
-    private func setupConnection(_ connection: NWConnection) {
-        connection.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
-            Task { @MainActor in
-                switch state {
-                case .ready:
-                    self.receiveData(from: connection)
-                case .failed(let error):
-                    print("GDL90 connection failed: \(error)")
-                case .cancelled:
-                    break
-                default:
-                    break
-                }
+    private nonisolated func receiveLoop(fd: Int32) {
+        var buffer = [UInt8](repeating: 0, count: 65536)
+
+        while true {
+            let bytesRead = buffer.withUnsafeMutableBytes { ptr -> Int in
+                recvfrom(fd, ptr.baseAddress, ptr.count, 0, nil, nil)
+            }
+
+            guard bytesRead > 0 else { break }  // socket closed or error
+
+            let data = Data(bytes: buffer, count: bytesRead)
+            Task { @MainActor [weak self] in
+                self?.processGDL90Data(data)
             }
         }
-
-        connection.start(queue: queue)
     }
 
     func stopListening() {
         broadcastTimer?.invalidate()
         broadcastTimer = nil
-        udpListener?.cancel()
-        udpConnection?.cancel()
-        udpListener = nil
-        udpConnection = nil
+        if socketFD >= 0 {
+            close(socketFD)
+            socketFD = -1
+        }
+        receiveThread = nil
+        isConnected = false
     }
 
     private func startBroadcastHeartbeat() {
@@ -149,25 +162,6 @@ class GDL90Reader: ObservableObject {
         // Wait a bit for the send to complete, then cancel
         try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
         connection.cancel()
-    }
-
-    private func receiveData(from connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) {
-            [weak self] data, context, isComplete, error in
-            guard let self else { return }
-
-            if let data = data, !data.isEmpty {
-                Task { @MainActor in
-                    self.processGDL90Data(data)
-                }
-            }
-
-            if error == nil {
-                Task { @MainActor in
-                    self.receiveData(from: connection)
-                }
-            }
-        }
     }
 
     private func updateGenericLocation(
