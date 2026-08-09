@@ -97,6 +97,9 @@ def create_database(db_path='aviation.db'):
             if row['le_ident'] == "XX" or row['he_ident'] == "XX":
                 continue  # Skip invalid runway identifiers
 
+            if row["closed"] == "1":
+                continue  # Skip closed runways
+
             side1 = (
                 row['airport_ident'],
                 row['le_ident'],
