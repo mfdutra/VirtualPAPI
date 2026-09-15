@@ -111,7 +111,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 **Main Views:**
 
 - **ContentView.swift**: Primary navigation and display view
-  - Shows selected airport/runway information with distance-to-go (DTG) and angle
+  - Shows selected airport/runway information with distance-to-go (DTG), angle (V/B), and required vertical speed (V/S, ft/min, positive = descent, rounded to 10; `---` when ground speed is unavailable)
   - Displays bearing indicator (arrow) showing direction to destination
   - Switches between GlideSlopeView and PapiView based on `AppSettings.visualization`
   - Double-tap to toggle between visualization modes
@@ -239,6 +239,8 @@ The glide slope deviation logic (GenericLocation.swift:222-244):
 - Positive deviation = aircraft above glide slope (fly down)
 - Exponential Moving Average (EMA) smoothing applied: `EMA_new = alpha * current + (1 - alpha) * EMA_previous`
   - Alpha configurable via `AppSettings.emaAlpha` (0.2 = smooth, 1.0 = instantaneous)
+- Required vertical speed: `verticalSpeedToDestination = (altitude - targetElevation) / (distanceToDestination / groundSpeed × 60)` in ft/min, straight line to the target at current ground speed; `nil` when ground speed is unknown or < 1 kt, or distance is not positive
+  - The math lives in the pure `static func GenericLocation.requiredVerticalSpeed(altitude:targetElevation:distance:groundSpeed:)` and display formatting (nearest 10 ft/min, `---` when nil) in `static func ContentView.formatVerticalSpeed(_:)`, so both are unit-tested directly without the timer ("Vertical Speed Tests" suite)
 - Display offset calculation (GenericLocation.swift:246-258):
   - Full scale deviation = 0.7° (±45% of display height = ±1.55555°)
   - `gsOffset = angleDeviation / 1.55555`, clamped to ±0.45

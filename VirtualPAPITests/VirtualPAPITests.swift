@@ -941,7 +941,224 @@ struct GenericLocationExtendedTests {
         #expect(location.groundSpeed == nil)
         #expect(location.bearingToDestination == nil)
         #expect(location.relativeBearingToDestination == nil)
+        #expect(location.verticalSpeedToDestination == nil)
         #expect(location.locationIsStale == true)
+    }
+}
+
+// MARK: - Vertical Speed Tests
+
+@Suite("Vertical Speed Tests", .serialized)
+struct VerticalSpeedTests {
+
+    @Test("Required V/S for a descent")
+    func testRequiredVerticalSpeedDescent() {
+        // 3000 ft to lose over 5 NM at 120 kt (2.5 min) = 1200 ft/min
+        let vs = GenericLocation.requiredVerticalSpeed(
+            altitude: 3100,
+            targetElevation: 100,
+            distance: 5,
+            groundSpeed: 120
+        )
+        #expect(vs == 1200)
+    }
+
+    @Test("Required V/S for a climb is negative")
+    func testRequiredVerticalSpeedClimb() {
+        // 1000 ft to gain over 5 NM at 120 kt (2.5 min) = -400 ft/min
+        let vs = GenericLocation.requiredVerticalSpeed(
+            altitude: 100,
+            targetElevation: 1100,
+            distance: 5,
+            groundSpeed: 120
+        )
+        #expect(vs == -400)
+    }
+
+    @Test("Required V/S is zero at target elevation")
+    func testRequiredVerticalSpeedLevel() {
+        let vs = GenericLocation.requiredVerticalSpeed(
+            altitude: 500,
+            targetElevation: 500,
+            distance: 5,
+            groundSpeed: 120
+        )
+        #expect(vs == 0)
+    }
+
+    @Test("Required V/S scales with ground speed")
+    func testRequiredVerticalSpeedScalesWithGroundSpeed() {
+        let slow = GenericLocation.requiredVerticalSpeed(
+            altitude: 3100,
+            targetElevation: 100,
+            distance: 5,
+            groundSpeed: 90
+        )
+        let fast = GenericLocation.requiredVerticalSpeed(
+            altitude: 3100,
+            targetElevation: 100,
+            distance: 5,
+            groundSpeed: 180
+        )
+        #expect(abs((slow ?? 0) - 900) < 0.001)
+        #expect(abs((fast ?? 0) - 1800) < 0.001)
+    }
+
+    @Test("Required V/S is nil without ground speed")
+    func testRequiredVerticalSpeedNilGroundSpeed() {
+        let vs = GenericLocation.requiredVerticalSpeed(
+            altitude: 3100,
+            targetElevation: 100,
+            distance: 5,
+            groundSpeed: nil
+        )
+        #expect(vs == nil)
+    }
+
+    @Test(
+        "Required V/S is nil below 1 kt ground speed",
+        arguments: [0.0, 0.5, 0.99, -10.0]
+    )
+    func testRequiredVerticalSpeedLowGroundSpeed(groundSpeed: Double) {
+        let vs = GenericLocation.requiredVerticalSpeed(
+            altitude: 3100,
+            targetElevation: 100,
+            distance: 5,
+            groundSpeed: groundSpeed
+        )
+        #expect(vs == nil)
+    }
+
+    @Test("Required V/S is computed at exactly 1 kt ground speed")
+    func testRequiredVerticalSpeedOneKnot() {
+        // 60 ft to lose over 1 NM at 1 kt (60 min) = 1 ft/min
+        let vs = GenericLocation.requiredVerticalSpeed(
+            altitude: 160,
+            targetElevation: 100,
+            distance: 1,
+            groundSpeed: 1
+        )
+        #expect(vs == 1)
+    }
+
+    @Test(
+        "Required V/S is nil when distance is not positive",
+        arguments: [0.0, -1.0]
+    )
+    func testRequiredVerticalSpeedNonPositiveDistance(distance: Double) {
+        let vs = GenericLocation.requiredVerticalSpeed(
+            altitude: 3100,
+            targetElevation: 100,
+            distance: distance,
+            groundSpeed: 120
+        )
+        #expect(vs == nil)
+    }
+
+    @Test("Format V/S shows dashes when unavailable")
+    func testFormatVerticalSpeedNil() {
+        #expect(ContentView.formatVerticalSpeed(nil) == "---")
+    }
+
+    @Test(
+        "Format V/S rounds to the nearest 10 ft/min",
+        arguments: [
+            (1200.0, "1200"),
+            (1234.0, "1230"),
+            (1235.0, "1240"),
+            (636.2, "640"),
+            (4.9, "0"),
+            (5.0, "10"),
+            (-400.0, "-400"),
+            (-655.0, "-660"),
+        ]
+    )
+    func testFormatVerticalSpeedRounding(value: Double, expected: String) {
+        #expect(ContentView.formatVerticalSpeed(value) == expected)
+    }
+
+    @Test("Format V/S never shows negative zero", arguments: [-0.0, -0.4, -4.9])
+    func testFormatVerticalSpeedNegativeZero(value: Double) {
+        #expect(ContentView.formatVerticalSpeed(value) == "0")
+    }
+
+    @Test("V/S to destination is updated by the location timer")
+    @MainActor
+    func testVerticalSpeedToDestinationUpdates() async {
+        let location = GenericLocation()
+        let selection = AirportSelection()
+
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "18",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.7749,
+            longitude_deg: -122.4194,
+            elevation_ft: 100,
+            heading_degT: 180,
+            displaced_threshold_ft: 0
+        )
+
+        selection.selectedRunway = runway
+        selection.setTargets()
+        location.airportSelection = selection
+
+        // Approximately 3 NM north, 954 ft above the runway, at 120 kt
+        location.updateLocation(
+            latitude: 37.8249,
+            longitude: -122.4194,
+            altitude: 1054,
+            speed: 120,
+            track: 180
+        )
+
+        // Wait for timer
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        let expected =
+            954 / (location.distanceToDestination / 120 * 60)
+        let vs = location.verticalSpeedToDestination
+
+        #expect(vs != nil)
+        #expect(abs((vs ?? 0) - expected) < 1)
+        // About 636 ft/min for 954 ft over ~3 NM at 120 kt
+        #expect((vs ?? 0) > 600 && (vs ?? 0) < 670)
+    }
+
+    @Test("V/S to destination is nil without ground speed")
+    @MainActor
+    func testVerticalSpeedToDestinationNilWithoutSpeed() async {
+        let location = GenericLocation()
+        let selection = AirportSelection()
+
+        let runway = Runway(
+            airport_ident: "TEST",
+            ident: "18",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.7749,
+            longitude_deg: -122.4194,
+            elevation_ft: 100,
+            heading_degT: 180,
+            displaced_threshold_ft: 0
+        )
+
+        selection.selectedRunway = runway
+        selection.setTargets()
+        location.airportSelection = selection
+
+        location.updateLocation(
+            latitude: 37.8249,
+            longitude: -122.4194,
+            altitude: 1054
+        )
+
+        // Wait for timer
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        #expect(location.distanceToDestination > 0)
+        #expect(location.verticalSpeedToDestination == nil)
     }
 }
 

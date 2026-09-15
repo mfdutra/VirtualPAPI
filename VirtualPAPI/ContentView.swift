@@ -55,6 +55,14 @@ struct ContentView: View {
                             )
                             .foregroundColor(getLocationColor())
                             .bold()
+                            Text("V/S")
+                            Text(
+                                ContentView.formatVerticalSpeed(
+                                    genericLocation.verticalSpeedToDestination
+                                )
+                            )
+                                .foregroundColor(getLocationColor())
+                                .bold()
                         }
                         .font(appSettings.headerSize.font)
                     }
@@ -195,6 +203,15 @@ struct ContentView: View {
             airportSelection.setAirport(airport)
             navigateToAirportSelection = true
         }
+    }
+
+    // Required V/S in ft/min (positive = descent), rounded to the nearest 10
+    static func formatVerticalSpeed(_ verticalSpeed: Double?) -> String {
+        guard let vs = verticalSpeed else {
+            return "---"
+        }
+        // Adding 0 turns -0 into 0 so it doesn't display as "-0"
+        return String(format: "%.0f", (vs / 10).rounded() * 10 + 0)
     }
 
     // If location data is lost, purple things become yellow

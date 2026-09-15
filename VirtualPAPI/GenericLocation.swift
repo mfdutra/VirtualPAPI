@@ -26,6 +26,7 @@ class GenericLocation: ObservableObject {
     @Published var papiPosition: Double = 0.5  // 2-reds 2-whites
     @Published var relativeBearingToDestination: Double?
     @Published var track: Double?
+    @Published var verticalSpeedToDestination: Double?  // ft/min, positive = descent
 
     private var timer: Timer?
     private var stalenessTimer: Timer?
@@ -65,6 +66,7 @@ class GenericLocation: ObservableObject {
         self.groundSpeed = nil
         self.bearingToDestination = nil
         self.relativeBearingToDestination = nil
+        self.verticalSpeedToDestination = nil
         self.isFirstAngleUpdate = true
     }
 
@@ -186,6 +188,7 @@ class GenericLocation: ObservableObject {
             otherLongitude: airport.targetLongitude!
         )
         updateAngleToDestination()
+        updateVerticalSpeedToDestination()
         updateBearingToDestination()
         updateGSOffset()
         updatePapiPosition()
@@ -241,6 +244,40 @@ class GenericLocation: ObservableObject {
         }
 
         print("Deviation: \(self.angleDeviation) Smoothed: \(self.smoothedAngleDeviation)")
+    }
+
+    // Vertical speed required to fly a straight line from the current
+    // position and altitude to the target, at the current ground speed
+    private func updateVerticalSpeedToDestination() {
+        self.verticalSpeedToDestination = GenericLocation.requiredVerticalSpeed(
+            altitude: altitude,
+            targetElevation: (self.airportSelection?.targetElevation)!,
+            distance: self.distanceToDestination,
+            groundSpeed: self.groundSpeed
+        )
+    }
+
+    /// Vertical speed required to reach the target elevation at the current ground speed
+    /// - Parameters:
+    ///   - altitude: Current altitude in feet
+    ///   - targetElevation: Target elevation in feet
+    ///   - distance: Distance to the target in nautical miles
+    ///   - groundSpeed: Ground speed in knots (nil if invalid)
+    /// - Returns: Vertical speed in ft/min (positive = descent), or nil if
+    ///   ground speed is unknown or below 1 kt, or the distance is not positive
+    static func requiredVerticalSpeed(
+        altitude: Double,
+        targetElevation: Double,
+        distance: Double,
+        groundSpeed: Double?
+    ) -> Double? {
+        guard let speed = groundSpeed, speed >= 1, distance > 0 else {
+            return nil
+        }
+
+        let minutesToGo = distance / speed * 60
+
+        return (altitude - targetElevation) / minutesToGo
     }
 
     private func updateGSOffset() {
