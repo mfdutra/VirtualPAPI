@@ -145,6 +145,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
   - Location source picker (Internal GPS / X-Plane / GDL90)
   - Visualization type picker (Glide Slope / PAPI)
   - Responsiveness slider (EMA alpha: Smooth/Medium/Fast/Instantaneous)
+  - Header size picker (Normal/Large/X-Large) for the DTG and V/B line in ContentView
   - Network information (local IP address for UDP troubleshooting)
   - Aviation database info (last modified date, airport/runway counts)
   - Database update functionality (downloads latest data from remote source)
@@ -168,12 +169,14 @@ These match the SQLite schema in `scripts/aviation.db`.
 **Enums (AppSettings.swift):**
 - `LocationSource`: Internal GPS / X-Plane / GDL90 (CaseIterable, Identifiable)
 - `VisualizationType`: Glide Slope / PAPI (CaseIterable, Identifiable)
+- `HeaderSize`: Normal / Large / X-Large (CaseIterable, Identifiable), exposes a `font` property
 
 **Settings and State:**
 - `AppSettings`: Observable settings object with UserDefaults persistence
   - `locationSource`: Active GPS/simulator source
   - `visualization`: Display mode (glide slope or PAPI)
   - `emaAlpha`: Smoothing factor (0.2 = smooth, 1.0 = instantaneous)
+  - `headerSize`: Font size of the DTG and V/B line in ContentView (`HeaderSize` enum: normal = `.body`, large = `.title2`, x-large = `.title`)
   - `showDebugInfo`: Toggle for debug overlay
   - `favoriteAirports`: Array of airport identifiers
   - Includes migration logic from old `useXPlane` boolean setting

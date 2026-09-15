@@ -49,13 +49,14 @@ struct ContentView: View {
                             )
                             .foregroundColor(getLocationColor())
                             .bold()
-                            Text("ANG")
+                            Text("V/B")
                             Text(
                                 "\(genericLocation.angleToDestination, specifier: "%.1f")"
                             )
                             .foregroundColor(getLocationColor())
                             .bold()
                         }
+                        .font(appSettings.headerSize.font)
                     }
                     .padding(.vertical, 8)
 

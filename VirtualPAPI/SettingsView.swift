@@ -34,6 +34,12 @@ struct SettingsView: View {
                     Text("Fast").tag(0.8)
                     Text("Instantaneous").tag(1.0)
                 }
+
+                Picker("Header size", selection: $settings.headerSize) {
+                    ForEach(HeaderSize.allCases) { size in
+                        Text(size.rawValue).tag(size)
+                    }
+                }
             }
 
             Section("Network") {

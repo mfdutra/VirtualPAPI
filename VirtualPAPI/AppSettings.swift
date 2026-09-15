@@ -23,6 +23,22 @@ enum VisualizationType: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum HeaderSize: String, CaseIterable, Identifiable {
+    case normal = "Normal"
+    case large = "Large"
+    case xLarge = "X-Large"
+
+    var id: String { rawValue }
+
+    var font: Font {
+        switch self {
+        case .normal: return .body
+        case .large: return .title2
+        case .xLarge: return .title
+        }
+    }
+}
+
 class AppSettings: ObservableObject {
     @Published var locationSource: LocationSource {
         didSet {
@@ -69,6 +85,12 @@ class AppSettings: ObservableObject {
         }
     }
 
+    @Published var headerSize: HeaderSize {
+        didSet {
+            UserDefaults.standard.set(headerSize.rawValue, forKey: "headerSize")
+        }
+    }
+
     init() {
         // Migrate from old useXPlane boolean if needed
         if let savedSource = UserDefaults.standard.string(
@@ -108,6 +130,10 @@ class AppSettings: ObservableObject {
 
         self.emaAlpha =
             UserDefaults.standard.object(forKey: "emaAlpha") as? Double ?? 0.2
+
+        self.headerSize =
+            UserDefaults.standard.string(forKey: "headerSize")
+            .flatMap(HeaderSize.init(rawValue:)) ?? .normal
     }
 
     // MARK: - Favorite Airports Management
