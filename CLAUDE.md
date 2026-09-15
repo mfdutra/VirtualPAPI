@@ -88,7 +88,8 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 - Updates `GenericLocation` only when X-Plane is the selected source (XGPSDataReader.swift:108)
 
 **GDL90 Devices** (`LocationSource.gdl90`):
-- `GDL90Reader` listens on UDP port 4000 for GDL90-formatted packets
+- `GDL90Reader` listens on UDP port 4000 for GDL90-formatted packets, plus port 43211 on a best-effort basis (if binding 43211 fails, it keeps listening on 4000 only; if 4000 fails, nothing is started)
+- Each port gets its own socket and receive thread; both feed the same `processGDL90Data()`
 - Uses the same raw BSD socket approach as `XGPSDataReader` for receiving (never calls `connect()`), to avoid stealing broadcast packets from other GDL90 apps on the same port
 - Implements full GDL90 protocol parsing with CRC validation
 - Parses Message ID 10 (Ownship Report) for position, altitude, speed, and track

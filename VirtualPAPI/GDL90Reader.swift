@@ -21,8 +21,11 @@ class GDL90Reader: ObservableObject {
     @Published var isConnected: Bool = false
     @Published var lastUpdateTime: Date = Date()
 
-    private var socketFD: Int32 = -1
-    private var receiveThread: Thread?
+    private static let primaryPort: UInt16 = 4000
+    private static let secondaryPort: UInt16 = 43211  // iLevil 3 AW
+
+    private var socketFDs: [Int32] = []
+    private var receiveThreads: [Thread] = []
     private var broadcastTimer: Timer?
     private let queue = DispatchQueue(label: "gdl90-udp-queue")
 
@@ -30,18 +33,31 @@ class GDL90Reader: ObservableObject {
     var appSettings: AppSettings?
 
     deinit {
-        if socketFD >= 0 {
-            close(socketFD)
-        }
+        socketFDs.forEach { close($0) }
         broadcastTimer?.invalidate()
         broadcastTimer = nil
     }
 
     func startListening() {
+        guard let primaryFD = openListeningSocket(port: Self.primaryPort) else {
+            return
+        }
+        startReceiveThread(fd: primaryFD, port: Self.primaryPort)
+        isConnected = true
+
+        // Best effort: if the secondary port fails, keep going with the primary.
+        if let secondaryFD = openListeningSocket(port: Self.secondaryPort) {
+            startReceiveThread(fd: secondaryFD, port: Self.secondaryPort)
+        }
+
+        startBroadcastHeartbeat()
+    }
+
+    private func openListeningSocket(port: UInt16) -> Int32? {
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else {
-            print("GDL90: failed to create socket: \(String(cString: strerror(errno)))")
-            return
+            print("GDL90: failed to create socket for port \(port): \(String(cString: strerror(errno)))")
+            return nil
         }
 
         // Never call connect() on this socket: a "connected" socket takes
@@ -59,7 +75,7 @@ class GDL90Reader: ObservableObject {
         var addr = sockaddr_in()
         addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = in_port_t(4000).bigEndian
+        addr.sin_port = in_port_t(port).bigEndian
         addr.sin_addr.s_addr = INADDR_ANY
 
         let bindResult = withUnsafePointer(to: &addr) { ptr in
@@ -69,22 +85,23 @@ class GDL90Reader: ObservableObject {
         }
 
         guard bindResult == 0 else {
-            print("GDL90: bind failed: \(String(cString: strerror(errno)))")
+            print("GDL90: bind to port \(port) failed: \(String(cString: strerror(errno)))")
             close(fd)
-            return
+            return nil
         }
 
-        socketFD = fd
-        isConnected = true
+        return fd
+    }
+
+    private func startReceiveThread(fd: Int32, port: UInt16) {
+        socketFDs.append(fd)
 
         let thread = Thread { [weak self] in
             self?.receiveLoop(fd: fd)
         }
-        thread.name = "gdl90-udp-receive"
+        thread.name = "gdl90-udp-receive-\(port)"
         thread.start()
-        receiveThread = thread
-
-        startBroadcastHeartbeat()
+        receiveThreads.append(thread)
     }
 
     private nonisolated func receiveLoop(fd: Int32) {
@@ -107,11 +124,9 @@ class GDL90Reader: ObservableObject {
     func stopListening() {
         broadcastTimer?.invalidate()
         broadcastTimer = nil
-        if socketFD >= 0 {
-            close(socketFD)
-            socketFD = -1
-        }
-        receiveThread = nil
+        socketFDs.forEach { close($0) }
+        socketFDs = []
+        receiveThreads = []
         isConnected = false
     }
 
