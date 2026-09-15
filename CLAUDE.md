@@ -151,6 +151,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
   - Database update functionality (downloads latest data from remote source)
   - Debug mode toggle
   - Links to debug views (GDL90, Generic Location, Destination Map)
+  - "Destination in Google Maps" button: opens a `https://www.google.com/maps/search/?api=1&query=lat,lon` universal link at the selected target coordinates (Google Maps app if installed, otherwise the browser); disabled when no destination is selected
 
 **Debug Views:**
 

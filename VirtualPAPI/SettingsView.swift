@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var genericLocation: GenericLocation
+    @Environment(\.openURL) private var openURL
     @State var ipAddress: String = ""
     @State private var databaseModifiedDate: Date?
     @State private var tableCounts: (airports: Int, runways: Int)?
@@ -128,6 +129,13 @@ struct SettingsView: View {
                     "Destination Map",
                     destination: DestinationMapView()
                 )
+
+                Button("Destination in Google Maps") {
+                    if let url = googleMapsURL {
+                        openURL(url)
+                    }
+                }
+                .disabled(googleMapsURL == nil)
             }
         }
         .navigationTitle("Settings")
@@ -136,6 +144,24 @@ struct SettingsView: View {
             loadDatabaseModifiedDate()
             loadTableCounts()
         }
+    }
+
+    /// Google Maps universal link pinned at the selected destination.
+    /// iOS opens the Google Maps app when installed, otherwise the browser.
+    private var googleMapsURL: URL? {
+        guard
+            let lat = genericLocation.airportSelection?.targetLatitude,
+            let lon = genericLocation.airportSelection?.targetLongitude
+        else { return nil }
+
+        var components = URLComponents(
+            string: "https://www.google.com/maps/search/"
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "api", value: "1"),
+            URLQueryItem(name: "query", value: "\(lat),\(lon)"),
+        ]
+        return components?.url
     }
 
     private func loadDatabaseModifiedDate() {
