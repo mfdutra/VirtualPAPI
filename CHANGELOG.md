@@ -5,6 +5,58 @@ All notable changes to VirtualPAPI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4] - 2026-09-15
+
+### Added
+
+#### Navigation Display
+- **Required vertical speed (V/S)**: New field on the main screen showing the ft/min needed to fly a straight line from the current position and altitude to the target at the current ground speed
+- **Descent convention**: Positive values indicate a descent, rounded to the nearest 10 ft/min
+- **Graceful fallback**: Displays `---` when ground speed is unavailable or below 1 kt, or when distance is not positive
+- **Configurable header size**: New "Header size" picker (Normal / Large / X-Large) under Visualization in Settings, applied to the DTG and V/B line in ContentView and persisted in `AppSettings`
+
+#### Location Sources
+- **Additional GDL90 port**: `GDL90Reader` now also listens on UDP port 43211 (used by the iLevil 3 AW) in addition to port 4000
+- **Best-effort binding**: If port 43211 cannot be bound, the reader keeps listening on port 4000 only; each port gets its own socket and receive thread feeding the same parser
+
+#### Settings
+- **Destination in Google Maps**: New button in Settings opens a Google Maps universal link pinned at the selected target coordinates (Google Maps app when installed, otherwise the browser); disabled when no destination is selected
+
+#### Developer Tools
+- **Runway check script**: New `scripts/rwy_check.py` reads `aviation.db`, projects displaced threshold coordinates with the haversine formula, and outputs a KML file with styled points and lines for each threshold
+- **Push checklist**: New `PUSH_CHECKLIST.md` documenting the release/publish steps
+
+#### Testing
+- **Vertical Speed test suite**: Unit tests covering the required vertical speed calculation and its display formatting
+
+### Changed
+
+#### UDP Receive Architecture
+- **Raw BSD sockets**: `XGPSDataReader` and `GDL90Reader` now receive with `socket`/`bind`/`recvfrom` on a dedicated background thread instead of `NWListener`
+- **No longer steals broadcasts**: `NWListener`'s UDP mode `connect()`s its underlying socket to each sender, which on BSD-derived kernels takes delivery priority over other apps' plain listening sockets on the same port — this silently stole X-Plane XGPS packets (port 49002) and GDL90 packets (port 4000) from other apps such as ForeFlight
+- **Socket options**: Sockets bind to `INADDR_ANY` with `SO_REUSEADDR`/`SO_REUSEPORT` and never call `connect()`, behaving as normal passive listeners
+- **Heartbeat unchanged**: `GDL90Reader`'s outbound heartbeat broadcast still uses `NWConnection`, since sending is unaffected
+
+#### User Interface
+- **"ANG" renamed to "V/B"**: The angle field on the main screen is now labeled V/B (vertical bearing), matching Boeing terminology
+
+#### Aviation Database
+- **Closed runways excluded**: `gen_sqlite.py` now skips runways flagged as closed, so they no longer appear in selection
+- **Multiple data refreshes**: Several `aviation.db` regenerations with the latest airport and runway data from OurAirports.com
+
+### Technical Details
+
+#### Required Vertical Speed
+- **Formula**: `(altitude - targetElevation) / (distanceToDestination / groundSpeed × 60)` in ft/min
+- **Pure functions**: Math lives in `GenericLocation.requiredVerticalSpeed(altitude:targetElevation:distance:groundSpeed:)` and formatting in `ContentView.formatVerticalSpeed(_:)`, so both are unit-tested directly without the update timer
+- **Nil cases**: Returns `nil` when ground speed is unknown or < 1 kt, or distance is not positive
+
+#### Google Maps Link
+- **URL format**: `https://www.google.com/maps/search/?api=1&query=<lat>,<lon>` at the selected target coordinates
+- **Opened via**: SwiftUI's `@Environment(\.openURL)`
+
+---
+
 ## [1.3] - 2025-12-07
 
 ### Added
