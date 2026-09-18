@@ -97,10 +97,11 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 - Each port gets its own socket and receive thread; both feed the same `processGDL90Data()`
 - Uses the same raw BSD socket approach as `XGPSDataReader` for receiving (never calls `connect()`), to avoid stealing broadcast packets from other GDL90 apps on the same port
 - Implements full GDL90 protocol parsing with CRC validation
-- Parses Message ID 10 (Ownship Report) for position, altitude, speed, and track
+- Parses Message ID 10 (Ownship Report) for position, pressure altitude, speed, and track
 - Parses Message ID 11 (Ownship Geometric Altitude) for geometric altitude
+- Altitude fed to `GenericLocation` is geometric (Msg 11) when one arrived within the last `GDL90Reader.geometricAltitudeMaxAge` (3 s), otherwise pressure altitude (Msg 10) as a fallback — see "Altitude datum selection" below
 - Broadcasts UDP heartbeat on port 63093 (via `NWConnection`) to advertise availability to GDL90 devices
-- Updates `GenericLocation` only when GDL90 is the selected source (GDL90Reader.swift:175)
+- Updates `GenericLocation` only when GDL90 is the selected source (GDL90Reader.swift:199)
 
 **GenericLocation** acts as the single source of truth for the UI and contains:
 - Current position (lat/lon/alt), speed, and track
@@ -123,6 +124,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
   - Favorite airports quick-access section (scrollable horizontal list)
   - Navigation to AirportSelectionView and SettingsView
   - Location staleness warning when GPS signal is lost
+  - Altitude datum indicator under the DTG line, only when GDL90 is the active source and location isn't stale: grey "GEO ALT" when using geometric altitude, orange "⚠ PRESS ALT" caution when falling back to pressure altitude (internal GPS and X-Plane are always MSL, so nothing is shown)
   - Debug info display (lat/lon/alt/speed/track/source) when enabled
 
 - **GlideSlopeView.swift**: ILS-style glide slope indicator
@@ -209,7 +211,7 @@ The XGPS protocol expects packets starting with "XGPS" header followed by comma-
 ### GDL90 Protocol Integration
 The GDL90 protocol is a standard aviation data link protocol used by many portable GPS and ADS-B receivers. The implementation (GDL90Reader.swift):
 
-**Receiving:** Uses the same raw BSD socket / `recvfrom()` approach as `XGPSDataReader` (GDL90Reader.swift:40-105) for the same reason — avoids stealing UDP broadcast packets from other GDL90-consuming apps on port 4000. The outbound heartbeat broadcast (below) is unaffected and still uses `NWConnection`, since sending isn't subject to this issue.
+**Receiving:** Uses the same raw BSD socket / `recvfrom()` approach as `XGPSDataReader` (GDL90Reader.swift:49-114) for the same reason — avoids stealing UDP broadcast packets from other GDL90-consuming apps on port 4000. The outbound heartbeat broadcast (below) is unaffected and still uses `NWConnection`, since sending isn't subject to this issue.
 
 **Framing and Validation:**
 - Messages framed with 0x7E flag bytes
@@ -224,6 +226,11 @@ The GDL90 protocol is a standard aviation data link protocol used by many portab
   - 12-bit velocity with 1 knot resolution (0xFFF = invalid)
   - 8-bit track with LSB = 360/256 = 1.40625 degrees
 - Message ID 11 (Ownship Geometric Altitude): 16-bit signed with 5 ft resolution
+
+**Altitude datum selection:**
+- The glidepath compares aircraft altitude against MSL runway elevations, but Msg 10 altitude is pressure altitude (29.92 inHg), which can be off by hundreds of feet on non-standard days
+- `processGDL90Data` records `geometricAltitudeTime` whenever a Msg 11 arrives; on each Msg 10 the pure `static func GDL90Reader.selectAltitude(pressureAltitude:geometricAltitude:geometricAltitudeTime:now:)` picks geometric altitude if it's at most `geometricAltitudeMaxAge` (3 s, tolerating a couple of dropped 1 Hz messages) old, else pressure altitude
+- The result is published as `GDL90Reader.usingGeometricAltitude`, which drives the ContentView indicator; unit-tested in the "GDL90 Altitude Selection Tests" suite
 
 **Device Discovery:**
 - Broadcasts UDP heartbeat on port 63093 every 5 seconds

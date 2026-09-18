@@ -1170,6 +1170,69 @@ struct VerticalSpeedTests {
     }
 }
 
+// MARK: - GDL90 Altitude Selection Tests
+
+@Suite("GDL90 Altitude Selection Tests")
+struct GDL90AltitudeSelectionTests {
+
+    let now = Date()
+
+    @Test("Uses geometric altitude when message 11 is fresh")
+    @MainActor
+    func testFreshGeometricAltitude() {
+        let selected = GDL90Reader.selectAltitude(
+            pressureAltitude: 2000,
+            geometricAltitude: 2300,
+            geometricAltitudeTime: now.addingTimeInterval(-1),
+            now: now
+        )
+        #expect(selected.altitude == 2300)
+        #expect(selected.isGeometric)
+    }
+
+    @Test("Uses geometric altitude right at the freshness limit")
+    @MainActor
+    func testGeometricAltitudeAtLimit() {
+        let selected = GDL90Reader.selectAltitude(
+            pressureAltitude: 2000,
+            geometricAltitude: 2300,
+            geometricAltitudeTime: now.addingTimeInterval(
+                -GDL90Reader.geometricAltitudeMaxAge
+            ),
+            now: now
+        )
+        #expect(selected.isGeometric)
+    }
+
+    @Test("Falls back to pressure altitude when message 11 is stale")
+    @MainActor
+    func testStaleGeometricAltitude() {
+        let selected = GDL90Reader.selectAltitude(
+            pressureAltitude: 2000,
+            geometricAltitude: 2300,
+            geometricAltitudeTime: now.addingTimeInterval(
+                -GDL90Reader.geometricAltitudeMaxAge - 0.1
+            ),
+            now: now
+        )
+        #expect(selected.altitude == 2000)
+        #expect(!selected.isGeometric)
+    }
+
+    @Test("Falls back to pressure altitude when message 11 never arrived")
+    @MainActor
+    func testNoGeometricAltitude() {
+        let selected = GDL90Reader.selectAltitude(
+            pressureAltitude: 2000,
+            geometricAltitude: 0,
+            geometricAltitudeTime: nil,
+            now: now
+        )
+        #expect(selected.altitude == 2000)
+        #expect(!selected.isGeometric)
+    }
+}
+
 // MARK: - AppSettings Tests
 
 @Suite("AppSettings Tests")

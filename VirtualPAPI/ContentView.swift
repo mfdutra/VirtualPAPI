@@ -15,6 +15,7 @@ struct ContentView: View {
     @EnvironmentObject var genericLocation: GenericLocation
     @EnvironmentObject var appSettings: AppSettings
     @EnvironmentObject var airportSelection: AirportSelection
+    @EnvironmentObject var gdl90Reader: GDL90Reader
     @State private var navigateToAirportSelection = false
 
     var body: some View {
@@ -65,6 +66,25 @@ struct ContentView: View {
                                 .bold()
                         }
                         .font(appSettings.headerSize.font)
+
+                        // Internal GPS and X-Plane are always MSL; GDL90 may
+                        // fall back to pressure altitude
+                        if appSettings.locationSource == .gdl90,
+                            !genericLocation.locationIsStale
+                        {
+                            if gdl90Reader.usingGeometricAltitude {
+                                Text("GEO ALT")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Label(
+                                    "PRESS ALT",
+                                    systemImage: "exclamationmark.triangle.fill"
+                                )
+                                    .font(.caption.bold())
+                                    .foregroundColor(.orange)
+                            }
+                        }
                     }
                     .padding(.vertical, 8)
 

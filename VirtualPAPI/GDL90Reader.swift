@@ -16,6 +16,10 @@ class GDL90Reader: ObservableObject {
     @Published var longitude: Double = 0.0
     @Published var altitude: Double = 0.0  // Pressure altitude from message 10
     @Published var geometricAltitude: Double = 0.0  // Geometric altitude from message 11
+    @Published var geometricAltitudeTime: Date?  // When the last message 11 arrived
+    // True when the altitude fed to GenericLocation is geometric (message 11),
+    // false when falling back to pressure altitude (message 10)
+    @Published var usingGeometricAltitude: Bool = false
     @Published var groundSpeed: Double = 0.0
     @Published var track: Double = 0.0
     @Published var isConnected: Bool = false
@@ -23,6 +27,11 @@ class GDL90Reader: ObservableObject {
 
     private static let primaryPort: UInt16 = 4000
     private static let secondaryPort: UInt16 = 43211  // iLevil 3 AW
+
+    // Message 11 is normally sent once per second alongside message 10, so
+    // a 3 second window tolerates a couple of dropped packets before falling
+    // back to pressure altitude
+    static let geometricAltitudeMaxAge: TimeInterval = 3.0
 
     private var socketFDs: [Int32] = []
     private var receiveThreads: [Thread] = []
@@ -359,7 +368,39 @@ class GDL90Reader: ObservableObject {
         self.track = track
         self.lastUpdateTime = Date()
 
-        updateGenericLocation(latitude, longitude, altitude, speed, track)
+        let selected = GDL90Reader.selectAltitude(
+            pressureAltitude: altitude,
+            geometricAltitude: geometricAltitude,
+            geometricAltitudeTime: geometricAltitudeTime,
+            now: lastUpdateTime
+        )
+        self.usingGeometricAltitude = selected.isGeometric
+
+        updateGenericLocation(
+            latitude,
+            longitude,
+            selected.altitude,
+            speed,
+            track
+        )
+    }
+
+    // The glidepath is computed against MSL runway elevations, so prefer
+    // geometric altitude (message 11) when it's fresh. Otherwise fall back to
+    // pressure altitude (message 10), which is referenced to 29.92 inHg and
+    // can be off by hundreds of feet on non-standard days.
+    static func selectAltitude(
+        pressureAltitude: Double,
+        geometricAltitude: Double,
+        geometricAltitudeTime: Date?,
+        now: Date
+    ) -> (altitude: Double, isGeometric: Bool) {
+        guard let time = geometricAltitudeTime,
+            now.timeIntervalSince(time) <= geometricAltitudeMaxAge
+        else {
+            return (pressureAltitude, false)
+        }
+        return (geometricAltitude, true)
     }
 
     // Parse Message ID 11: Ownship Geometric Altitude
@@ -376,8 +417,6 @@ class GDL90Reader: ObservableObject {
         let geometricAlt = Double(altSigned) * 5.0
 
         self.geometricAltitude = geometricAlt
-
-        // Optionally update the main altitude with geometric altitude
-        // For now, just store it separately
+        self.geometricAltitudeTime = Date()
     }
 }
