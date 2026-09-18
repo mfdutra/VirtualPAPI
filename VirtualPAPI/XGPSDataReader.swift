@@ -73,19 +73,20 @@ class XGPSDataReader: ObservableObject {
     }
 
     private nonisolated func receiveLoop(fd: Int32) {
-        var buffer = [UInt8](repeating: 0, count: 65536)
-
-        while true {
-            let bytesRead = buffer.withUnsafeMutableBytes { ptr -> Int in
-                recvfrom(fd, ptr.baseAddress, ptr.count, 0, nil, nil)
-            }
-
-            guard bytesRead > 0 else { break }  // socket closed or error
-
-            let data = Data(bytes: buffer, count: bytesRead)
+        runUDPReceiveLoop(fd: fd, label: "XGPS") { data in
             Task { @MainActor [weak self] in
                 self?.processXGPSData(data)
             }
+        }
+
+        // The loop only returns on a fatal socket error. If this thread is
+        // still the active receiver, stopListening() didn't cause it, so
+        // surface the failure instead of silently going quiet.
+        let thread = Thread.current
+        Task { @MainActor [weak self] in
+            guard let self, self.receiveThread === thread else { return }
+            print("XGPS: receive loop exited unexpectedly")
+            self.stopListening()
         }
     }
 
