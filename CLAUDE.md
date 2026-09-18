@@ -88,7 +88,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 **X-Plane Simulator** (`LocationSource.xPlane`):
 - `XGPSDataReader` listens on UDP port 49002 for XGPS format packets
 - Uses a raw BSD socket (not `NWListener`) that never calls `connect()`, so it can't steal broadcast packets from other apps listening on the same port (e.g. ForeFlight) — see "Concurrency" below
-- Parses lat/lon/alt/speed/track from comma-separated ASCII data (XGPSDataReader.swift:119-142)
+- Parses lat/lon/alt/speed/track from comma-separated ASCII data via the pure `nonisolated static func XGPSDataReader.parseXGPS(_:)` (XGPSDataReader.swift:119-157); malformed packets are dropped
 - Converts altitude from meters to feet (×3.2808399) and speed from m/s to knots (×1.9438445)
 - Updates `GenericLocation` only when X-Plane is the selected source (XGPSDataReader.swift:108)
 
@@ -199,12 +199,13 @@ These match the SQLite schema in `scripts/aviation.db`.
 ## Key Implementation Details
 
 ### X-Plane UDP Integration
-The XGPS protocol expects packets starting with "XGPS" header followed by comma-separated values. The parser (XGPSDataReader.swift:119-142):
-1. Validates 41+ byte packets with "XGPS" header
-2. Extracts longitude (component 1), latitude (component 2), altitude in meters (component 3), track in degrees (component 4), speed in m/s (component 5)
-3. Converts altitude from meters to feet (×3.2808399)
-4. Converts speed from m/s to knots (×1.9438445)
-5. Updates both `XGPSDataReader` and `GenericLocation` states (only when X-Plane is selected source)
+The XGPS protocol expects packets starting with "XGPS" header followed by comma-separated values. The parser is the pure `nonisolated static func parseXGPS(_ data: Data) -> XGPSFix?` (XGPSDataReader.swift:119-157), called by `processXGPSData(_:)` (XGPSDataReader.swift:159-170), and unit-tested directly ("XGPS Parser Tests" suite):
+1. Validates 41+ byte packets with "XGPS" header and at least 6 comma-separated fields
+2. Extracts longitude (component 1), latitude (component 2), altitude in meters (component 3), track in degrees (component 4), speed in m/s (component 5); fields are trimmed of whitespace/control characters
+3. Rejects the whole packet (returns `nil`, no state update) if any of those fields isn't numeric — never substitutes 0
+4. Converts altitude from meters to feet (×3.2808399)
+5. Converts speed from m/s to knots (×1.9438445)
+6. `processXGPSData` updates both `XGPSDataReader` and `GenericLocation` states (only when X-Plane is selected source)
 
 **Why a raw BSD socket instead of `NWListener`:** `NWListener`'s UDP mode creates a per-sender `NWConnection` by internally `connect()`-ing a socket to the remote address ("established-over-unconnected"). On BSD-derived kernels, a connected socket takes delivery priority over other apps' plain wildcard-bound listening sockets on the same port, so this used to silently steal X-Plane's broadcast packets away from apps like ForeFlight running at the same time. `XGPSDataReader.startListening()` (XGPSDataReader.swift:27-73) instead opens a raw socket with `SO_REUSEADDR`/`SO_REUSEPORT`, binds to `INADDR_ANY:49002`, and only ever calls `recvfrom()` on a dedicated background `Thread` — never `connect()` — so it behaves like a normal passive listener and coexists with other apps.
 

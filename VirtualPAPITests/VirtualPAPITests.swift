@@ -18,6 +18,48 @@ extension UserDefaults {
     }
 }
 
+// MARK: - XGPS Parser Tests
+
+@Suite("XGPS Parser Tests")
+struct XGPSParserTests {
+
+    private func packet(_ s: String) -> Data { Data(s.utf8) }
+
+    @Test("Valid packet is parsed and converted")
+    func testValidPacket() throws {
+        let fix = try #require(
+            XGPSDataReader.parseXGPS(
+                packet("XGPSSimulator,-122.123450,37.543210,100.0,270.5,50.0")))
+        #expect(fix.longitude == -122.12345)
+        #expect(fix.latitude == 37.54321)
+        #expect(abs(fix.altitude - 328.08399) < 1e-6)
+        #expect(fix.track == 270.5)
+        #expect(abs(fix.groundSpeed - 97.192225) < 1e-6)
+    }
+
+    @Test("Packet with too few fields is rejected")
+    func testTooFewFields() {
+        #expect(
+            XGPSDataReader.parseXGPS(packet("XGPSSimulator,-122.12345,37.54321XXXXXXXXXX"))
+                == nil)
+    }
+
+    @Test("Packet with non-numeric field is rejected")
+    func testNonNumericField() {
+        #expect(
+            XGPSDataReader.parseXGPS(
+                packet("XGPSSimulator,-122.123450,37.543210,abc,270.5,50.0")) == nil)
+    }
+
+    @Test("Packet with wrong header or too short is rejected")
+    func testBadHeaderOrShort() {
+        #expect(
+            XGPSDataReader.parseXGPS(
+                packet("XGPZSimulator,-122.123450,37.543210,100.0,270.5,50.0")) == nil)
+        #expect(XGPSDataReader.parseXGPS(packet("XGPS1,1,2,3,4,5")) == nil)
+    }
+}
+
 // MARK: - GenericLocation Tests
 
 @Suite("GenericLocation Tests", .serialized)

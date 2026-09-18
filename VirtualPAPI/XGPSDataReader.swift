@@ -116,28 +116,49 @@ class XGPSDataReader: ObservableObject {
         }
     }
 
+    struct XGPSFix: Equatable {
+        let latitude: Double
+        let longitude: Double
+        let altitude: Double  // feet
+        let groundSpeed: Double  // knots
+        let track: Double  // degrees
+    }
+
+    /// Parses an XGPS packet ("XGPS<name>,lon,lat,alt_m,track,speed_m/s").
+    /// Returns nil if the packet is too short, has the wrong header, has
+    /// fewer than 6 comma-separated fields, or any used field isn't numeric.
+    nonisolated static func parseXGPS(_ data: Data) -> XGPSFix? {
+        guard data.count >= 41,
+            String(data: data.prefix(4), encoding: .ascii) == "XGPS",
+            let components = String(data: data, encoding: .ascii)?
+                .components(separatedBy: ","),
+            components.count >= 6
+        else { return nil }
+
+        let values = components[1...5].compactMap {
+            Double($0.trimmingCharacters(in: .whitespacesAndNewlines.union(.controlCharacters)))
+        }
+        guard values.count == 5 else { return nil }
+
+        return XGPSFix(
+            latitude: values[1],
+            longitude: values[0],
+            altitude: values[2] * 3.2808399,  // meter to feet
+            groundSpeed: values[4] * 1.9438445,  // m/s to knots
+            track: values[3]
+        )
+    }
+
     func processXGPSData(_ data: Data) {
-        guard data.count >= 41 else { return }
+        guard let fix = Self.parseXGPS(data) else { return }
 
-        let header = String(data: data.prefix(4), encoding: .ascii)
-        guard header == "XGPS" else { return }
-
-        let dataStr = String(data: data, encoding: .ascii)
-        let components = dataStr?.components(separatedBy: ",")
-
-        let longitude = Double(components?[1] ?? "") ?? 0
-        let latitude = Double(components?[2] ?? "") ?? 0
-        let altitude = (Double(components?[3] ?? "") ?? 0) * 3.2808399  // meter to feet
-        let track = Double(components?[4] ?? "") ?? 0
-        let speed = (Double(components?[5] ?? "") ?? 0) * 1.9438445  // m/s to knots
-
-        self.latitude = latitude
-        self.longitude = longitude
-        self.altitude = altitude
-        self.groundSpeed = speed
-        self.track = track
+        self.latitude = fix.latitude
+        self.longitude = fix.longitude
+        self.altitude = fix.altitude
+        self.groundSpeed = fix.groundSpeed
+        self.track = fix.track
         self.lastUpdateTime = Date()
 
-        updateGenericLocation(latitude, longitude, altitude, speed, track)
+        updateGenericLocation(fix.latitude, fix.longitude, fix.altitude, fix.groundSpeed, fix.track)
     }
 }
