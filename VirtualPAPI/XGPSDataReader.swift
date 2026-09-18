@@ -25,6 +25,7 @@ class XGPSDataReader: ObservableObject {
     }
 
     func startListening() {
+        guard socketFD < 0 else { return }  // already listening
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else {
             print("XGPS: failed to create socket: \(String(cString: strerror(errno)))")

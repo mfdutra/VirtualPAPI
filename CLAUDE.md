@@ -73,6 +73,8 @@ The app uses SwiftUI's `@StateObject` and `@EnvironmentObject` pattern for globa
 
 3. Location sources are managed centrally in VirtualPAPIApp:
    - `startListenerForSource()` and `stopListenerForSource()` methods toggle between sources
+   - VirtualPAPIApp is the only owner of listener lifecycle; views (including debug views) must not call `startListening()`/`stopListening()`
+   - `XGPSDataReader.startListening()` and `GDL90Reader.startListening()` are idempotent (return early if already listening), so a repeated call can't open duplicate sockets/threads or leak the heartbeat timer
    - Only one location source is active at a time based on `AppSettings.locationSource`
    - The active source updates `GenericLocation` which the UI observes
 
@@ -163,6 +165,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 **Debug Views:**
 
 - **GDL90DebugView.swift**: Real-time GDL90 protocol diagnostics
+  - Observes `GDL90Reader` only; it never starts or stops the listener (VirtualPAPIApp owns the lifecycle via the selected source). Shows a note when GDL90 is not the selected location source, since no data will arrive then
 - **GenericLocationDebugView.swift**: Location calculation diagnostics
 - **DestinationMapView.swift**: Map visualization of destination and current position
 

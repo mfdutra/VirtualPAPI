@@ -9,10 +9,19 @@ import SwiftUI
 
 struct GDL90DebugView: View {
     @EnvironmentObject var gdl90Reader: GDL90Reader
+    @EnvironmentObject var settings: AppSettings
 
     var body: some View {
         List {
             Section("Connection") {
+                if settings.locationSource != .gdl90 {
+                    Text(
+                        "GDL90 is not the selected location source. Select GDL90 in Settings to start listening."
+                    )
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                }
+
                 HStack {
                     Text("Status")
                     Spacer()
@@ -139,12 +148,6 @@ struct GDL90DebugView: View {
             }
         }
         .navigationTitle("GDL90 Debug")
-        .onAppear {
-            gdl90Reader.startListening()
-        }
-        .onDisappear {
-            gdl90Reader.stopListening()
-        }
     }
 
     private func timeAgo(from date: Date) -> String {
@@ -168,5 +171,6 @@ struct GDL90DebugView: View {
     NavigationStack {
         GDL90DebugView()
             .environmentObject(GDL90Reader())
+            .environmentObject(AppSettings())
     }
 }

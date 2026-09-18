@@ -48,6 +48,7 @@ class GDL90Reader: ObservableObject {
     }
 
     func startListening() {
+        guard socketFDs.isEmpty else { return }  // already listening
         guard let primaryFD = openListeningSocket(port: Self.primaryPort) else {
             return
         }
