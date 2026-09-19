@@ -1649,6 +1649,21 @@ struct DatabaseManagerTests {
         #expect(results.isEmpty)
     }
 
+    @Test("Search with a multi-byte query binds the whole term")
+    func testSearchAirportsMultiByteQuery() {
+        let dbManager = DatabaseManager.shared
+
+        // No airport code contains these characters, so a correctly bound
+        // term matches nothing (a truncated/garbage binding would behave
+        // like an empty pattern and match everything)
+        #expect(dbManager.searchAirports(query: "日本✈️Ø").isEmpty)
+        #expect(dbManager.getAirport(ident: "日本✈️Ø") == nil)
+
+        // ...and the next query still returns sane results
+        let results = dbManager.searchAirports(query: "KSFO")
+        #expect(results.contains(where: { $0.ident == "KSFO" }))
+    }
+
     @Test("Concurrent queries while the database is replaced don't crash")
     func testConcurrentQueriesDuringReplace() async throws {
         let dbManager = DatabaseManager.shared

@@ -9,6 +9,13 @@ import CryptoKit
 import Foundation
 import SQLite3
 
+/// Tells SQLite to copy the bound value, so it doesn't have to outlive the
+/// `sqlite3_bind_*` call (SQLITE_STATIC would promise that it does).
+private let SQLITE_TRANSIENT = unsafeBitCast(
+    -1,
+    to: sqlite3_destructor_type.self
+)
+
 // MARK: - String Extension for Base32 Decoding
 
 nonisolated extension String {
@@ -606,13 +613,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
 
         if sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK
         {
-            sqlite3_bind_text(
-                statement,
-                1,
-                (ident as NSString).utf8String,
-                -1,
-                nil
-            )
+            sqlite3_bind_text(statement, 1, ident, -1, SQLITE_TRANSIENT)
 
             if sqlite3_step(statement) == SQLITE_ROW {
                 let ident = String(cString: sqlite3_column_text(statement, 0))
@@ -657,41 +658,11 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         if sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK
         {
             let searchPattern = "\(query)%"
-            sqlite3_bind_text(
-                statement,
-                1,
-                (searchPattern as NSString).utf8String,
-                -1,
-                nil
-            )
-            sqlite3_bind_text(
-                statement,
-                2,
-                (searchPattern as NSString).utf8String,
-                -1,
-                nil
-            )
-            sqlite3_bind_text(
-                statement,
-                3,
-                (searchPattern as NSString).utf8String,
-                -1,
-                nil
-            )
-            sqlite3_bind_text(
-                statement,
-                4,
-                (searchPattern as NSString).utf8String,
-                -1,
-                nil
-            )
-            sqlite3_bind_text(
-                statement,
-                5,
-                (searchPattern as NSString).utf8String,
-                -1,
-                nil
-            )
+            sqlite3_bind_text(statement, 1, searchPattern, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(statement, 2, searchPattern, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(statement, 3, searchPattern, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(statement, 4, searchPattern, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(statement, 5, searchPattern, -1, SQLITE_TRANSIENT)
 
             while sqlite3_step(statement) == SQLITE_ROW {
                 let ident = String(cString: sqlite3_column_text(statement, 0))
@@ -733,13 +704,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
 
         if sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK
         {
-            sqlite3_bind_text(
-                statement,
-                1,
-                (airportIdent as NSString).utf8String,
-                -1,
-                nil
-            )
+            sqlite3_bind_text(statement, 1, airportIdent, -1, SQLITE_TRANSIENT)
 
             while sqlite3_step(statement) == SQLITE_ROW {
                 let ident = String(cString: sqlite3_column_text(statement, 0))
