@@ -11,7 +11,6 @@ import Foundation
 
 class HighFrequencyLocationTracker: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
-    private var timer: Timer?
 
     @Published var currentLocation: CLLocationCoordinate2D?
     @Published var elevation: Double?
@@ -23,8 +22,6 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
 
     var appSettings: AppSettings?
     var genericLocation: GenericLocation?
-
-    private let updateFrequency: TimeInterval = 0.5  // 2 times per second
 
     override init() {
         super.init()
@@ -49,31 +46,18 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
         }
 
         isTracking = true
+        // Continuous updates at the best accuracy with no distance filter.
+        // Safe to call repeatedly (e.g. on authorization changes).
         locationManager.startUpdatingLocation()
-
-        // Start high-frequency timer
-        timer = Timer.scheduledTimer(
-            withTimeInterval: updateFrequency,
-            repeats: true
-        ) { [weak self] _ in
-            self?.requestLocationUpdate()
-        }
     }
 
     func stopTracking() {
         isTracking = false
         locationManager.stopUpdatingLocation()
-        timer?.invalidate()
-        timer = nil
     }
 
     private func requestLocationPermission() {
         locationManager.requestWhenInUseAuthorization()
-    }
-
-    private func requestLocationUpdate() {
-        // Force location manager to provide updates
-        locationManager.requestLocation()
     }
 
     deinit {

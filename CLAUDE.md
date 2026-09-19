@@ -96,7 +96,7 @@ The app uses SwiftUI's `@StateObject` and `@EnvironmentObject` pattern for globa
 The app supports three location sources, selectable via `AppSettings.locationSource` enum:
 
 **Internal GPS** (`LocationSource.internalGPS`):
-- `HighFrequencyLocationTracker` uses CoreLocation with high-frequency polling
+- `HighFrequencyLocationTracker` uses CoreLocation continuous updates (`startUpdatingLocation()` with `kCLLocationAccuracyBest` and `kCLDistanceFilterNone`, ~1 Hz); no timer or `requestLocation()` polling, so repeated `startTracking()` calls (e.g. on authorization changes) are harmless
 - Instantiated in VirtualPAPIApp and starts tracking on app launch (VirtualPAPIApp.swift:40-41)
 - Updates `GenericLocation` with position, speed, and track data
 - Runs continuously but only updates GenericLocation when selected as active source
