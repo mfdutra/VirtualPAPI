@@ -243,7 +243,26 @@ class DatabaseManager {
         return components.url
     }
 
-    /// Download the aviation database from remote server with ETag caching
+    // MARK: - Remote Database Update Limits
+
+    /// Largest database file accepted from the remote server. The bundled
+    /// database is ~3.5 MB; 50 MB leaves plenty of room for growth (e.g.
+    /// including every OurAirports airport) while rejecting anything absurd.
+    static let maxDatabaseSize: Int64 = 50 * 1024 * 1024
+
+    /// Sanity floors for a downloaded database. The bundled database has
+    /// ~11,400 airports and ~29,700 runways, so a legitimate update should
+    /// never fall below roughly half of that.
+    static let minAirportCount = 5_000
+    static let minRunwayCount = 15_000
+
+    /// Download the aviation database from remote server with ETag caching.
+    ///
+    /// The update is transactional: the file is downloaded to a staging file,
+    /// validated with `validateDatabase(at:)`, and only then atomically swapped
+    /// in for the live database. The previous database is kept as
+    /// `aviation.db.bak` and restored if the new one can't be reopened. The
+    /// ETag and download date are stored only after a successful swap.
     /// - Returns: True if database was updated, false if already up-to-date
     @discardableResult
     func downloadRemoteDatabase() async throws -> Bool {
@@ -271,8 +290,24 @@ class DatabaseManager {
         config.urlCache = nil
         let session = URLSession(configuration: config)
 
-        // Download
-        let (data, response) = try await session.data(for: request)
+        // Download to a temporary file instead of into memory
+        let (tempURL, response) = try await session.download(for: request)
+
+        let fileManager = FileManager.default
+        let liveURL = URL(fileURLWithPath: getDocumentsDatabasePath())
+        let directory = liveURL.deletingLastPathComponent()
+        // Staging file lives next to the live database so the final swap is
+        // an atomic rename on the same volume.
+        let stagingURL = directory.appendingPathComponent(
+            "aviation.db.download"
+        )
+        let backupName = "aviation.db.bak"
+        let backupURL = directory.appendingPathComponent(backupName)
+
+        defer {
+            try? fileManager.removeItem(at: tempURL)
+            try? fileManager.removeItem(at: stagingURL)
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw DatabaseError.invalidResponse
@@ -289,46 +324,196 @@ class DatabaseManager {
             throw DatabaseError.httpError(httpResponse.statusCode)
         }
 
-        // Close the current database
+        // Reject oversized downloads based on the advertised length (when
+        // present) and on the actual size of the file we received.
+        let advertisedSize = httpResponse.expectedContentLength
+        if advertisedSize > Self.maxDatabaseSize {
+            throw DatabaseError.tooLarge(advertisedSize)
+        }
+        let actualSize =
+            (try? fileManager.attributesOfItem(atPath: tempURL.path)[.size]
+                as? NSNumber)?.int64Value ?? 0
+        if actualSize > Self.maxDatabaseSize {
+            throw DatabaseError.tooLarge(actualSize)
+        }
+
+        try? fileManager.removeItem(at: stagingURL)
+        try fileManager.moveItem(at: tempURL, to: stagingURL)
+
+        // Validate before touching the live database
+        try Self.validateDatabase(at: stagingURL)
+
+        // Swap in the new database, keeping the previous one as a backup
         closeDatabase()
+        try? fileManager.removeItem(at: backupURL)
+        do {
+            _ = try fileManager.replaceItemAt(
+                liveURL,
+                withItemAt: stagingURL,
+                backupItemName: backupName,
+                options: .withoutDeletingBackupItem
+            )
+        } catch {
+            openDatabase()
+            throw DatabaseError.installFailed(error.localizedDescription)
+        }
 
-        // Write new database to Documents directory
-        let documentsPath = getDocumentsDatabasePath()
-        try data.write(to: URL(fileURLWithPath: documentsPath))
+        guard openDatabase(),
+            getTableRowCounts().airports >= Self.minAirportCount
+        else {
+            // Roll back to the previous database
+            closeDatabase()
+            _ = try? fileManager.replaceItemAt(liveURL, withItemAt: backupURL)
+            openDatabase()
+            throw DatabaseError.installFailed(
+                "The new database could not be opened"
+            )
+        }
 
-        // Store the new ETag for future requests
+        // Only now record the ETag and download timestamp
         if let newETag = httpResponse.value(forHTTPHeaderField: "ETag") {
             UserDefaults.standard.set(newETag, forKey: etagKey)
         }
-
-        // Store download timestamp
         UserDefaults.standard.set(Date(), forKey: "last_database_download")
-
-        // Reopen the database
-        openDatabase()
 
         print("Database updated successfully")
         return true
     }
 
+    // MARK: - Database Validation
+
+    /// Validates that the file at `url` is a usable aviation database:
+    /// SQLite header, `PRAGMA integrity_check`, the tables and columns the
+    /// app queries, and minimum airport/runway counts.
+    /// - Throws: `DatabaseError.invalidDatabase` describing the first problem.
+    static func validateDatabase(
+        at url: URL,
+        minAirports: Int = minAirportCount,
+        minRunways: Int = minRunwayCount
+    ) throws {
+        // 1. SQLite header magic
+        let magic = Data("SQLite format 3\0".utf8)
+        let header = try? FileHandle(forReadingFrom: url).read(
+            upToCount: magic.count
+        )
+        guard header == magic else {
+            throw DatabaseError.invalidDatabase("not an SQLite database")
+        }
+
+        // 2. Open read-only
+        var db: OpaquePointer?
+        defer { sqlite3_close(db) }
+        guard
+            sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil)
+                == SQLITE_OK
+        else {
+            throw DatabaseError.invalidDatabase("could not be opened")
+        }
+
+        // 3. Integrity check
+        guard scalarText(db, "PRAGMA integrity_check") == "ok" else {
+            throw DatabaseError.invalidDatabase("integrity check failed")
+        }
+
+        // 4. Required tables and the columns the app reads
+        let schemaQueries = [
+            """
+            SELECT ident, name, iata_code, latitude_deg, longitude_deg,
+                   elevation_ft, local_code, gps_code, icao_code
+            FROM airports LIMIT 0
+            """,
+            """
+            SELECT airport_ident, ident, length_ft, width_ft, latitude_deg,
+                   longitude_deg, elevation_ft, heading_degT,
+                   displaced_threshold_ft
+            FROM runways LIMIT 0
+            """,
+        ]
+        guard schemaQueries.allSatisfy({ canPrepare(db, $0) }) else {
+            throw DatabaseError.invalidDatabase("missing required tables")
+        }
+
+        // 5. Sanity floor on row counts
+        let airports =
+            scalarText(db, "SELECT COUNT(*) FROM airports").flatMap { Int($0) }
+            ?? 0
+        let runways =
+            scalarText(db, "SELECT COUNT(*) FROM runways").flatMap { Int($0) }
+            ?? 0
+        guard airports >= minAirports, runways >= minRunways else {
+            throw DatabaseError.invalidDatabase(
+                "too few records (\(airports) airports, \(runways) runways)"
+            )
+        }
+    }
+
+    /// Returns the first column of the first row of `sql` as text, or nil.
+    private static func scalarText(_ db: OpaquePointer?, _ sql: String)
+        -> String?
+    {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK,
+            sqlite3_step(statement) == SQLITE_ROW,
+            let text = sqlite3_column_text(statement, 0)
+        else {
+            return nil
+        }
+        return String(cString: text)
+    }
+
+    /// Whether `sql` compiles against the database (tables/columns exist).
+    private static func canPrepare(_ db: OpaquePointer?, _ sql: String) -> Bool
+    {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        return sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK
+    }
+
     // MARK: - Database Errors
 
-    enum DatabaseError: Error {
+    enum DatabaseError: LocalizedError, Equatable {
         case invalidURL
         case invalidResponse
         case httpError(Int)
+        case tooLarge(Int64)
+        case invalidDatabase(String)
+        case installFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidURL:
+                return "Could not build the database update URL"
+            case .invalidResponse:
+                return "Invalid response from the update server"
+            case .httpError(let code):
+                return "Update server returned HTTP \(code)"
+            case .tooLarge(let size):
+                let formatted = ByteCountFormatter.string(
+                    fromByteCount: size,
+                    countStyle: .file
+                )
+                return "Downloaded database is too large (\(formatted))"
+            case .invalidDatabase(let reason):
+                return "Downloaded database is invalid: \(reason)"
+            case .installFailed(let reason):
+                return "Could not install the new database: \(reason)"
+            }
+        }
     }
 
-    private func openDatabase() {
+    @discardableResult
+    private func openDatabase() -> Bool {
         // Open database from Documents directory
         let dbPath = getDocumentsDatabasePath()
 
         if sqlite3_open(dbPath, &db) != SQLITE_OK {
             print("Error opening database at \(dbPath)")
-            return
+            return false
         }
 
         print("Database opened successfully at \(dbPath)")
+        return true
     }
 
     private func closeDatabase() {

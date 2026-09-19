@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SQLite3
 import Testing
 
 @testable import VirtualPAPI
@@ -1578,6 +1579,131 @@ struct DatabaseManagerTests {
         let results = dbManager.searchAirports(query: "ZZZZZZZZ")
 
         #expect(results.isEmpty)
+    }
+}
+
+// MARK: - Database Validation Tests
+
+@Suite("Database Validation Tests")
+struct DatabaseValidationTests {
+
+    private func tempURL(_ name: String) -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(
+            "\(UUID().uuidString)-\(name)"
+        )
+    }
+
+    private func bundledDatabaseURL() throws -> URL {
+        try #require(Bundle.main.url(forResource: "aviation", withExtension: "db"))
+    }
+
+    private func expectInvalid(_ url: URL) {
+        #expect {
+            try DatabaseManager.validateDatabase(at: url)
+        } throws: { error in
+            guard case DatabaseManager.DatabaseError.invalidDatabase = error
+            else { return false }
+            return true
+        }
+    }
+
+    /// Creates an SQLite database at `url` by executing `sql`.
+    private func makeDatabase(at url: URL, sql: String) throws {
+        var db: OpaquePointer?
+        defer { sqlite3_close(db) }
+        try #require(sqlite3_open(url.path, &db) == SQLITE_OK)
+        try #require(sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK)
+    }
+
+    @Test("Bundled database is valid")
+    func testBundledDatabaseIsValid() throws {
+        try DatabaseManager.validateDatabase(at: bundledDatabaseURL())
+    }
+
+    @Test("HTML file is rejected")
+    func testHTMLRejected() throws {
+        let url = tempURL("portal.html")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("<html><body>Captive portal login</body></html>".utf8)
+            .write(to: url)
+
+        expectInvalid(url)
+    }
+
+    @Test("Empty file is rejected")
+    func testEmptyFileRejected() throws {
+        let url = tempURL("empty.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data().write(to: url)
+
+        expectInvalid(url)
+    }
+
+    @Test("Truncated database is rejected")
+    func testTruncatedDatabaseRejected() throws {
+        let url = tempURL("truncated.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let data = try Data(contentsOf: bundledDatabaseURL())
+        try data.prefix(data.count / 2).write(to: url)
+
+        expectInvalid(url)
+    }
+
+    @Test("Database with empty tables is rejected")
+    func testEmptyTablesRejected() throws {
+        let url = tempURL("empty-tables.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try makeDatabase(
+            at: url,
+            sql: """
+                CREATE TABLE airports (ident TEXT PRIMARY KEY, name TEXT,
+                    iata_code TEXT, latitude_deg REAL, longitude_deg REAL,
+                    elevation_ft INTEGER, local_code TEXT, gps_code TEXT,
+                    icao_code TEXT);
+                CREATE TABLE runways (airport_ident TEXT, ident TEXT,
+                    length_ft INTEGER, width_ft INTEGER, latitude_deg REAL,
+                    longitude_deg REAL, elevation_ft INTEGER,
+                    heading_degT REAL, displaced_threshold_ft INTEGER,
+                    PRIMARY KEY (airport_ident, ident));
+                """
+        )
+
+        expectInvalid(url)
+        // Schema is fine: with no floor, the same file passes
+        try DatabaseManager.validateDatabase(
+            at: url,
+            minAirports: 0,
+            minRunways: 0
+        )
+    }
+
+    @Test("Database missing required tables is rejected")
+    func testMissingTablesRejected() throws {
+        let url = tempURL("wrong-schema.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try makeDatabase(at: url, sql: "CREATE TABLE other (x INTEGER);")
+
+        #expect(
+            throws: DatabaseManager.DatabaseError.invalidDatabase(
+                "missing required tables"
+            )
+        ) {
+            try DatabaseManager.validateDatabase(
+                at: url,
+                minAirports: 0,
+                minRunways: 0
+            )
+        }
+    }
+
+    @Test("Bundled database fits within the size cap")
+    func testBundledDatabaseWithinLimits() throws {
+        let url = try bundledDatabaseURL()
+        let size = try #require(
+            FileManager.default.attributesOfItem(atPath: url.path)[.size]
+                as? NSNumber
+        ).int64Value
+        #expect(size < DatabaseManager.maxDatabaseSize)
     }
 }
 

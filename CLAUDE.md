@@ -58,7 +58,13 @@ Filtering rules applied by the script:
 **Database Management:**
 - `DatabaseManager` (singleton) handles SQLite operations
 - Database copied from bundle to Documents directory on first launch
-- Supports remote database updates via `downloadRemoteDatabase()` method
+- Supports remote database updates via `downloadRemoteDatabase()` method (TOTP-authenticated, ETag-cached). The update is transactional:
+  1. Downloads to a temporary file (`URLSession.download(for:)`), rejecting anything over `maxDatabaseSize` (50 MB; bundled DB is ~3.5 MB) by Content-Length and by actual file size
+  2. Validates the staged file (`Documents/aviation.db.download`) with `static func validateDatabase(at:)`: SQLite header magic, read-only open, `PRAGMA integrity_check` == "ok", `airports`/`runways` tables with the columns the app queries, and counts >= `minAirportCount` (5,000) / `minRunwayCount` (15,000) (bundled DB has ~11,400 / ~29,700)
+  3. Only then closes the live handle and swaps it in with `FileManager.replaceItemAt`, keeping the previous DB as `aviation.db.bak`; if reopening fails, the backup is restored
+  4. Stores the ETag and `last_database_download` only after a successful swap, so a failed update is retried next time
+  - Failures surface as `DatabaseError` (a `LocalizedError`: `tooLarge`, `invalidDatabase`, `installFailed`, plus HTTP/URL errors), shown in SettingsView
+  - Validation is unit-tested ("Database Validation Tests") against the bundled DB, HTML, empty, truncated, empty-tables and wrong-schema files
 - Provides query methods: `getAirport(ident:)`, `searchAirports()`, `getRunways(airportId:)`
 - Returns table counts for diagnostics
 
