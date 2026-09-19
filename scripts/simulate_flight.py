@@ -74,6 +74,13 @@ def interpolate_position(wp1, wp2, fraction):
     Interpolate position between two waypoints.
     fraction: 0.0 = at wp1, 1.0 = at wp2
     Returns dict with lat, lon, alt.
+
+    Note: latitude/longitude are interpolated linearly even though the
+    fraction comes from a great circle distance. The two only agree exactly
+    along a meridian or the equator; on typical approach legs (a few nm) the
+    cross-track error of this approximation is well under a metre, which is
+    irrelevant for driving the app's display. Use great circle (slerp)
+    interpolation if this script is ever used for legs of hundreds of miles.
     """
     # Linear interpolation for latitude and longitude
     lat = wp1['lat'] + (wp2['lat'] - wp1['lat']) * fraction
@@ -91,7 +98,15 @@ def simulate_flight(waypoints, speed_knots=120, dest_ip=None):
         waypoints: List of waypoint dictionaries
         speed_knots: Speed in knots (nautical miles per hour)
         dest_ip: Destination IP address for UDP messages (optional)
+
+    Raises:
+        ValueError: if fewer than two waypoints are given (a route needs at
+            least a start and an end).
     """
+    if len(waypoints) < 2:
+        raise ValueError(
+            f'need at least 2 waypoints to fly a route, got {len(waypoints)}')
+
     speed_nm_per_sec = speed_knots / 3600.0  # Convert to nm/second
     speed_mps = speed_knots * 0.514444  # Convert knots to meters per second
 
@@ -122,9 +137,11 @@ def simulate_flight(waypoints, speed_knots=120, dest_ip=None):
         segment_distance = haversine_distance(
             wp1['lat'], wp1['lon'], wp2['lat'], wp2['lon'])
 
-        # Calculate fraction along this segment
+        # Calculate fraction along this segment, never past wp2 (a leftover
+        # distance carried over from a very short previous segment could
+        # otherwise extrapolate the position beyond the next waypoint)
         if segment_distance > 0:
-            fraction = distance_along_segment / segment_distance
+            fraction = min(distance_along_segment / segment_distance, 1.0)
         else:
             fraction = 1.0
 
@@ -135,11 +152,9 @@ def simulate_flight(waypoints, speed_knots=120, dest_ip=None):
         heading = calculate_bearing(
             wp1['lat'], wp1['lon'], wp2['lat'], wp2['lon'])
 
-        # Determine which waypoint we're heading towards
-        if fraction < 0.5:
-            wp_label = f"→ {wp2['name']}"
-        else:
-            wp_label = f"→ {wp2['name']}"
+        # Determine which waypoint we're heading towards: always the far end
+        # of the segment we're on, whatever the fraction flown
+        wp_label = f"→ {wp2['name']}"
 
         # Print current position
         print(
@@ -206,4 +221,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     waypoints = read_waypoints(args.waypoints_file)
-    simulate_flight(waypoints, speed_knots=args.speed, dest_ip=args.ip)
+    try:
+        simulate_flight(waypoints, speed_knots=args.speed, dest_ip=args.ip)
+    except ValueError as exc:
+        parser.error(f'{args.waypoints_file}: {exc}')
