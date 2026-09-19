@@ -70,20 +70,15 @@ struct ContentView: View {
                         // Internal GPS and X-Plane are always MSL; GDL90 may
                         // fall back to pressure altitude
                         if appSettings.locationSource == .gdl90,
-                            !genericLocation.locationIsStale
+                            !genericLocation.locationIsStale,
+                            !gdl90Reader.usingGeometricAltitude
                         {
-                            if gdl90Reader.usingGeometricAltitude {
-                                Text("GEO ALT")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Label(
-                                    "PRESS ALT",
-                                    systemImage: "exclamationmark.triangle.fill"
-                                )
-                                    .font(.caption.bold())
-                                    .foregroundColor(.orange)
-                            }
+                            Label(
+                                "PRESS ALT",
+                                systemImage: "exclamationmark.triangle.fill"
+                            )
+                                .font(.caption.bold())
+                                .foregroundColor(.orange)
                         }
                     }
                     .padding(.vertical, 8)

@@ -124,7 +124,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
   - Favorite airports quick-access section (scrollable horizontal list)
   - Navigation to AirportSelectionView and SettingsView
   - Location staleness warning when GPS signal is lost
-  - Altitude datum indicator under the DTG line, only when GDL90 is the active source and location isn't stale: grey "GEO ALT" when using geometric altitude, orange "⚠ PRESS ALT" caution when falling back to pressure altitude (internal GPS and X-Plane are always MSL, so nothing is shown)
+  - Pressure altitude caution under the DTG line: orange "⚠ PRESS ALT", shown only when GDL90 is the active source, location isn't stale, and it has fallen back to pressure altitude (nothing is shown when using geometric altitude; internal GPS and X-Plane are always MSL)
   - Debug info display (lat/lon/alt/speed/track/source) when enabled
 
 - **GlideSlopeView.swift**: ILS-style glide slope indicator
