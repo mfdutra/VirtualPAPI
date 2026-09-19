@@ -153,13 +153,13 @@ class GenericLocation: ObservableObject {
     // Check location staleness every 5 seconds
     private func startStalenessCheck() {
         stalenessTimer?.invalidate()
-        stalenessTimer = Timer.scheduledTimer(
-            withTimeInterval: 5.0,
-            repeats: true
-        ) {
+        // .common mode so it keeps firing while the UI is tracking a scroll or slider drag
+        let t = Timer(timeInterval: 5.0, repeats: true) {
             [weak self] _ in
             self?.checkStaleness()
         }
+        RunLoop.main.add(t, forMode: .common)
+        stalenessTimer = t
     }
 
     private func checkStaleness() {
@@ -178,10 +178,13 @@ class GenericLocation: ObservableObject {
     // Update location information every second
     private func startDistanceCalculation() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
+        // .common mode so it keeps firing while the UI is tracking a scroll or slider drag
+        let t = Timer(timeInterval: 1.0, repeats: true) {
             [weak self] _ in
             self?.updateLocationInfo()
         }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     private func updateLocationInfo() {

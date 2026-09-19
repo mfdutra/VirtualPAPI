@@ -155,15 +155,15 @@ class GDL90Reader: ObservableObject {
             await self.sendBroadcast()
         }
 
-        // Schedule broadcasts every 5 seconds
-        broadcastTimer = Timer.scheduledTimer(
-            withTimeInterval: 5.0,
-            repeats: true
-        ) { [weak self] _ in
+        // Schedule broadcasts every 5 seconds (.common mode so it keeps
+        // firing while the UI is tracking a scroll or slider drag)
+        let t = Timer(timeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 await self?.sendBroadcast()
             }
         }
+        RunLoop.main.add(t, forMode: .common)
+        broadcastTimer = t
     }
 
     private func sendBroadcast() async {
