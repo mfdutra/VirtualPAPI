@@ -48,6 +48,15 @@ struct GDL90DebugView: View {
                     Text(timeAgo(from: gdl90Reader.lastUpdateTime))
                         .foregroundColor(.secondary)
                 }
+
+                HStack {
+                    Text("Heartbeat")
+                    Spacer()
+                    Text(gdl90Reader.heartbeatStatus.description)
+                        .font(.caption)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundColor(heartbeatColor)
+                }
             }
 
             Section("Position (Message 10)") {
@@ -156,6 +165,15 @@ struct GDL90DebugView: View {
             }
         }
         .navigationTitle("GDL90 Debug")
+    }
+
+    private var heartbeatColor: Color {
+        switch gdl90Reader.heartbeatStatus {
+        case .sent: return .green
+        case .failed: return .red
+        case .waiting: return .orange
+        case .idle: return .secondary
+        }
     }
 
     private func timeAgo(from date: Date) -> String {

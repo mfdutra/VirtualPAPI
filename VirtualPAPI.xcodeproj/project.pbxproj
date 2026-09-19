@@ -406,6 +406,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Virtual PAPI";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "VirtualPAPI receives position data from X-Plane and GDL90/ADS-B receivers on your local network, and announces itself so GDL90 devices can send data to it.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "VirtualPAPI needs access to your location to provide visual approach guidance and calculate distance to your destination.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -445,6 +446,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Virtual PAPI";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "VirtualPAPI receives position data from X-Plane and GDL90/ADS-B receivers on your local network, and announces itself so GDL90 devices can send data to it.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "VirtualPAPI needs access to your location to provide visual approach guidance and calculate distance to your destination.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

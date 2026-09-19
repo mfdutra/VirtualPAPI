@@ -257,6 +257,7 @@ The GDL90 protocol is a standard aviation data link protocol used by many portab
 - Broadcasts UDP heartbeat on port 63093 every 5 seconds
 - JSON payload: `{"App": "VirtualPAPI", "GDL90": {"port": 4000}}`
 - Allows GDL90 devices to discover and connect to the app
+- Sending to `255.255.255.255` on iOS 14+ requires the local network permission (`NSLocalNetworkUsageDescription`) and the Apple-managed `com.apple.developer.networking.multicast` entitlement; without the entitlement the `NWConnection` fails. The result of each heartbeat is published as `GDL90Reader.heartbeatStatus` (`HeartbeatStatus`: idle / waiting(reason) / sent / failed(reason); reset to idle by `stopListening()`) and shown as the "Heartbeat" row in GDL90DebugView
 
 ### Airport Selection and Target Calculation
 The `AirportSelection` class (AirportSelection.swift) manages destination configuration:
@@ -357,3 +358,5 @@ The app includes fully implemented features for real-world aviation use:
 - **Bundle ID**: com.mfdutra.VirtualPAPI
 - **Swift Version**: 5.0
 - **Supported Devices**: iPhone and iPad (universal)
+- **Privacy strings** (generated Info.plist via `INFOPLIST_KEY_*` build settings, Debug and Release): `NSLocationWhenInUseUsageDescription` (internal GPS) and `NSLocalNetworkUsageDescription` (UDP listeners on 4000/43211/49002 and the GDL90 heartbeat broadcast). `NSBonjourServices` is not needed since the app uses plain UDP, not Bonjour
+- **Entitlements**: none yet. The GDL90 heartbeat broadcast needs `com.apple.developer.networking.multicast`, which must be requested from Apple; once granted, add `VirtualPAPI/VirtualPAPI.entitlements` with that key set to true and point `CODE_SIGN_ENTITLEMENTS` at it (adding it before the grant breaks signing)

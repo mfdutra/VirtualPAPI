@@ -10,6 +10,26 @@ import Darwin
 import Foundation
 import Network
 
+// State of the most recent discovery heartbeat broadcast (port 63093).
+// On iOS 14+ broadcasting needs the local network permission and the
+// com.apple.developer.networking.multicast entitlement; without them the
+// broadcast fails, so surface it in GDL90DebugView instead of only printing
+enum HeartbeatStatus: Equatable {
+    case idle
+    case waiting(String)
+    case sent
+    case failed(String)
+
+    var description: String {
+        switch self {
+        case .idle: return "Not started"
+        case .waiting(let reason): return "Waiting: \(reason)"
+        case .sent: return "Sent"
+        case .failed(let reason): return "Failed: \(reason)"
+        }
+    }
+}
+
 @MainActor
 class GDL90Reader: ObservableObject {
     @Published var latitude: Double = 0.0
@@ -25,6 +45,7 @@ class GDL90Reader: ObservableObject {
     @Published var track: Double = 0.0
     @Published var isConnected: Bool = false
     @Published var lastUpdateTime: Date = Date()
+    @Published var heartbeatStatus: HeartbeatStatus = .idle
 
     private static let primaryPort: UInt16 = 4000
     private static let secondaryPort: UInt16 = 43211  // iLevil 3 AW
@@ -147,6 +168,7 @@ class GDL90Reader: ObservableObject {
         socketFDs = []
         receiveThreads = []
         isConnected = false
+        heartbeatStatus = .idle
     }
 
     private func startBroadcastHeartbeat() {
@@ -184,10 +206,27 @@ class GDL90Reader: ObservableObject {
         let connection = NWConnection(to: broadcastEndpoint, using: parameters)
 
         connection.stateUpdateHandler = { (state: NWConnection.State) in
-            if case .ready = state {
-                connection.send(content: data, completion: .idempotent)
-            } else if case .failed(let error) = state {
+            switch state {
+            case .ready:
+                connection.send(
+                    content: data,
+                    completion: .contentProcessed { error in
+                        let status: HeartbeatStatus =
+                            error.map { .failed("\($0)") } ?? .sent
+                        Task { @MainActor in self.heartbeatStatus = status }
+                    }
+                )
+            case .waiting(let error):
+                Task { @MainActor in
+                    self.heartbeatStatus = .waiting("\(error)")
+                }
+            case .failed(let error):
                 print("Broadcast connection failed: \(error)")
+                Task { @MainActor in
+                    self.heartbeatStatus = .failed("\(error)")
+                }
+            default:
+                break
             }
         }
 
