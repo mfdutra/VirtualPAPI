@@ -2050,3 +2050,29 @@ struct ModelTests {
         #expect(runway.heading_degT == nil)
     }
 }
+
+// MARK: - Local IP Address Tests
+
+@Suite("Local IP Address Tests")
+struct LocalIPAddressTests {
+
+    private func isPlausibleIPv4(_ address: String) -> Bool {
+        let octets = address.split(
+            separator: ".",
+            omittingEmptySubsequences: false
+        )
+        return octets.count == 4 && octets.allSatisfy { UInt8($0) != nil }
+    }
+
+    @Test("Returns nil or a plausible IPv4 address without crashing")
+    func testLocalIPAddress() {
+        guard let address = SettingsView.localIPAddress() else { return }
+        #expect(isPlausibleIPv4(address), "Unexpected address: \(address)")
+    }
+
+    @Test("Repeated calls are stable and leak-free")
+    func testLocalIPAddressIsRepeatable() {
+        let results = (0..<10).map { _ in SettingsView.localIPAddress() }
+        #expect(Set(results.map { $0 ?? "nil" }).count == 1)
+    }
+}

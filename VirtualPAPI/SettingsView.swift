@@ -231,44 +231,55 @@ struct SettingsView: View {
     }
 
     private func getLocalIPAddress() {
-        var address: String?
+        ipAddress = Self.localIPAddress() ?? "Unknown"
+    }
+
+    /// IPv4 address of the Wi-Fi interface (en0/en1), or nil when there is
+    /// none. `ifa_addr` and `ifa_name` are imported as implicitly unwrapped
+    /// optionals but can be NULL (e.g. an interface with no assigned
+    /// address), so both are checked before being dereferenced.
+    nonisolated static func localIPAddress() -> String? {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
 
         guard getifaddrs(&ifaddr) == 0 else {
-            return
+            return nil
         }
 
         defer { freeifaddrs(ifaddr) }
 
-        var ptr = ifaddr
-        while ptr != nil {
-            defer { ptr = ptr?.pointee.ifa_next }
+        guard let firstAddr = ifaddr else {
+            return nil
+        }
 
-            guard let interface = ptr?.pointee else { continue }
-            let addrFamily = interface.ifa_addr.pointee.sa_family
+        return sequence(first: firstAddr, next: { $0.pointee.ifa_next })
+            .lazy
+            .compactMap { ptr -> String? in
+                let interface = ptr.pointee
 
-            if addrFamily == UInt8(AF_INET) {
-                let name = String(cString: interface.ifa_name)
-                if name == "en0" || name == "en1" {
-                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                guard let addr = interface.ifa_addr,
+                    addr.pointee.sa_family == UInt8(AF_INET),
+                    let namePtr = interface.ifa_name
+                else { return nil }
+
+                let name = String(cString: namePtr)
+                guard name == "en0" || name == "en1" else { return nil }
+
+                var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                guard
                     getnameinfo(
-                        interface.ifa_addr,
-                        socklen_t(interface.ifa_addr.pointee.sa_len),
+                        addr,
+                        socklen_t(addr.pointee.sa_len),
                         &hostname,
                         socklen_t(hostname.count),
                         nil,
                         socklen_t(0),
                         NI_NUMERICHOST
-                    )
-                    address = String(cString: hostname)
-                    break
-                }
-            }
-        }
+                    ) == 0
+                else { return nil }
 
-        DispatchQueue.main.async {
-            self.ipAddress = address ?? "Unknown"
-        }
+                return String(cString: hostname)
+            }
+            .first
     }
 }
 
