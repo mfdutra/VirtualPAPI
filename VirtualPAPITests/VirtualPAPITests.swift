@@ -1838,6 +1838,153 @@ struct DatabaseValidationTests {
     }
 }
 
+// MARK: - Database Row Decoding Tests
+
+/// The query methods always read the app's own database in Documents and
+/// can't be pointed at an arbitrary file (and `replaceDatabase` enforces
+/// row-count floors a tiny fixture can't meet), so these exercise the row
+/// decoders directly, against the same SELECTs the `fetch*` methods use.
+@Suite("Database Row Decoding Tests")
+struct DatabaseRowDecodingTests {
+
+    private static let schema = """
+        CREATE TABLE airports (ident TEXT, name TEXT,
+            iata_code TEXT, latitude_deg REAL, longitude_deg REAL,
+            elevation_ft INTEGER, local_code TEXT, gps_code TEXT,
+            icao_code TEXT);
+        CREATE TABLE runways (airport_ident TEXT, ident TEXT,
+            length_ft INTEGER, width_ft INTEGER, latitude_deg REAL,
+            longitude_deg REAL, elevation_ft INTEGER,
+            heading_degT REAL, displaced_threshold_ft INTEGER);
+        """
+
+    private static let airportQuery = """
+        SELECT ident, name, latitude_deg, longitude_deg, elevation_ft
+        FROM airports ORDER BY rowid
+        """
+
+    private static let runwayQuery = """
+        SELECT ident, length_ft, width_ft, latitude_deg, longitude_deg,
+               elevation_ft, heading_degT, displaced_threshold_ft
+        FROM runways ORDER BY rowid
+        """
+
+    /// Creates a temporary database with the app's schema plus `rows`, runs
+    /// `query` against it and decodes every row with `decode`.
+    private func decodeRows<T>(
+        rows: String,
+        query: String,
+        decode: (OpaquePointer?) -> T?
+    ) throws -> [T?] {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString)-nulls.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        var db: OpaquePointer?
+        defer { sqlite3_close(db) }
+        try #require(sqlite3_open(url.path, &db) == SQLITE_OK)
+        try #require(
+            sqlite3_exec(db, Self.schema + rows, nil, nil, nil) == SQLITE_OK
+        )
+
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        try #require(
+            sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK
+        )
+
+        var decoded: [T?] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            decoded.append(decode(statement))
+        }
+        return decoded
+    }
+
+    @Test("columnText returns nil for a NULL column instead of crashing")
+    func testColumnTextHandlesNull() throws {
+        let texts = try decodeRows(
+            rows: """
+                INSERT INTO airports (ident, name) VALUES ('KSFO', NULL);
+                """,
+            query: Self.airportQuery,
+            decode: { DatabaseManager.columnText($0, 1) }
+        )
+
+        #expect(texts.count == 1)
+        #expect(texts[0] == .some(nil))
+    }
+
+    @Test("Airport with a NULL name decodes with an empty name")
+    func testAirportNullName() throws {
+        let airports = try decodeRows(
+            rows: """
+                INSERT INTO airports
+                    (ident, name, latitude_deg, longitude_deg, elevation_ft)
+                    VALUES ('KSFO', NULL, 37.6213, -122.3790, 13);
+                """,
+            query: Self.airportQuery,
+            decode: DatabaseManager.airport(from:)
+        )
+
+        let airport = try #require(airports.first ?? nil)
+        #expect(airport.ident == "KSFO")
+        #expect(airport.name == "")
+        #expect(airport.latitude_deg == 37.6213)
+        #expect(airport.elevation_ft == 13)
+    }
+
+    @Test("Airport with a NULL ident is skipped")
+    func testAirportNullIdentSkipped() throws {
+        let airports = try decodeRows(
+            rows: """
+                INSERT INTO airports
+                    (ident, name, latitude_deg, longitude_deg, elevation_ft)
+                    VALUES (NULL, 'No Ident Field', 37.0, -122.0, 10);
+                INSERT INTO airports
+                    (ident, name, latitude_deg, longitude_deg, elevation_ft)
+                    VALUES ('KSFO', 'San Francisco', 37.6213, -122.3790, 13);
+                """,
+            query: Self.airportQuery,
+            decode: DatabaseManager.airport(from:)
+        )
+
+        #expect(airports.count == 2)
+        #expect(airports[0] == nil)
+        #expect((airports[1] ?? nil)?.ident == "KSFO")
+    }
+
+    @Test("Runway with a NULL ident is skipped, other rows still decode")
+    func testRunwayNullIdentSkipped() throws {
+        let runways = try decodeRows(
+            rows: """
+                INSERT INTO runways (airport_ident, ident, length_ft, width_ft,
+                    latitude_deg, longitude_deg, elevation_ft, heading_degT,
+                    displaced_threshold_ft)
+                    VALUES ('KSFO', NULL, 11870, 200, 37.6213, -122.3790,
+                            13, 280.0, 500);
+                INSERT INTO runways (airport_ident, ident, length_ft, width_ft,
+                    latitude_deg, longitude_deg, elevation_ft, heading_degT,
+                    displaced_threshold_ft)
+                    VALUES ('KSFO', '28R', 11870, 200, 37.6213, -122.3790,
+                            NULL, NULL, 500);
+                """,
+            query: Self.runwayQuery,
+            decode: { DatabaseManager.runway(from: $0, airportIdent: "KSFO") }
+        )
+
+        #expect(runways.count == 2)
+        #expect(runways[0] == nil)
+        let runway = try #require(runways[1] ?? nil)
+        #expect(runway.ident == "28R")
+        #expect(runway.airport_ident == "KSFO")
+        #expect(runway.length_ft == 11870)
+        // Nullable numeric columns stay nil
+        #expect(runway.elevation_ft == nil)
+        #expect(runway.heading_degT == nil)
+        #expect(runway.displaced_threshold_ft == 500)
+    }
+}
+
 // MARK: - Model Tests
 
 @Suite("Model Tests")

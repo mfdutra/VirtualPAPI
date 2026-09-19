@@ -595,6 +595,71 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         queue.sync { fetchTableRowCounts() }
     }
 
+    // MARK: - Row decoding
+
+    /// Text of column `index` in the current row, or nil when it is NULL.
+    ///
+    /// `sqlite3_column_text` returns nil for a NULL column and
+    /// `String(cString:)` takes an implicitly unwrapped pointer, so reading a
+    /// NULL column directly would crash. The schema allows NULL in the text
+    /// columns the app reads, and a remote database update could introduce
+    /// one (validation checks structure and row counts, not NULLs).
+    static func columnText(_ statement: OpaquePointer?, _ index: Int32)
+        -> String?
+    {
+        sqlite3_column_text(statement, index).map { String(cString: $0) }
+    }
+
+    /// Decodes an airport from the current row of a
+    /// `SELECT ident, name, latitude_deg, longitude_deg, elevation_ft` query.
+    ///
+    /// Returns nil when `ident` is NULL: the identifier is how the rest of the
+    /// app refers to an airport, so such a row is unusable and is skipped. A
+    /// NULL `name` is only cosmetic and becomes an empty string.
+    static func airport(from statement: OpaquePointer?) -> Airport? {
+        guard let ident = columnText(statement, 0) else { return nil }
+
+        return Airport(
+            ident: ident,
+            name: columnText(statement, 1) ?? "",
+            latitude_deg: sqlite3_column_double(statement, 2),
+            longitude_deg: sqlite3_column_double(statement, 3),
+            elevation_ft: sqlite3_column_double(statement, 4)
+        )
+    }
+
+    /// Decodes a runway from the current row of a
+    /// `SELECT ident, length_ft, width_ft, latitude_deg, longitude_deg,
+    /// elevation_ft, heading_degT, displaced_threshold_ft` query.
+    ///
+    /// Returns nil when `ident` is NULL, for the same reason as `airport`.
+    static func runway(
+        from statement: OpaquePointer?,
+        airportIdent: String
+    ) -> Runway? {
+        guard let ident = columnText(statement, 0) else { return nil }
+
+        // Handle nullable columns
+        let elevation: Double? =
+            sqlite3_column_type(statement, 5) == SQLITE_NULL
+            ? nil : sqlite3_column_double(statement, 5)
+        let heading: Double? =
+            sqlite3_column_type(statement, 6) == SQLITE_NULL
+            ? nil : sqlite3_column_double(statement, 6)
+
+        return Runway(
+            airport_ident: airportIdent,
+            ident: ident,
+            length_ft: sqlite3_column_double(statement, 1),
+            width_ft: sqlite3_column_double(statement, 2),
+            latitude_deg: sqlite3_column_double(statement, 3),
+            longitude_deg: sqlite3_column_double(statement, 4),
+            elevation_ft: elevation,
+            heading_degT: heading,
+            displaced_threshold_ft: sqlite3_column_double(statement, 7)
+        )
+    }
+
     // MARK: - Query implementations (must run on `queue`)
 
     private func fetchAirport(ident: String) -> Airport? {
@@ -615,19 +680,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
             sqlite3_bind_text(statement, 1, ident, -1, SQLITE_TRANSIENT)
 
             if sqlite3_step(statement) == SQLITE_ROW {
-                let ident = String(cString: sqlite3_column_text(statement, 0))
-                let name = String(cString: sqlite3_column_text(statement, 1))
-                let latitude = sqlite3_column_double(statement, 2)
-                let longitude = sqlite3_column_double(statement, 3)
-                let elevation = sqlite3_column_double(statement, 4)
-
-                airport = Airport(
-                    ident: ident,
-                    name: name,
-                    latitude_deg: latitude,
-                    longitude_deg: longitude,
-                    elevation_ft: elevation
-                )
+                airport = Self.airport(from: statement)
             }
         }
 
@@ -664,20 +717,10 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
             sqlite3_bind_text(statement, 5, searchPattern, -1, SQLITE_TRANSIENT)
 
             while sqlite3_step(statement) == SQLITE_ROW {
-                let ident = String(cString: sqlite3_column_text(statement, 0))
-                let name = String(cString: sqlite3_column_text(statement, 1))
-                let latitude = sqlite3_column_double(statement, 2)
-                let longitude = sqlite3_column_double(statement, 3)
-                let elevation = sqlite3_column_double(statement, 4)
-
-                let airport = Airport(
-                    ident: ident,
-                    name: name,
-                    latitude_deg: latitude,
-                    longitude_deg: longitude,
-                    elevation_ft: elevation
-                )
-                airports.append(airport)
+                // Rows without an identifier are unusable and skipped
+                if let airport = Self.airport(from: statement) {
+                    airports.append(airport)
+                }
             }
         }
 
@@ -706,34 +749,13 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
             sqlite3_bind_text(statement, 1, airportIdent, -1, SQLITE_TRANSIENT)
 
             while sqlite3_step(statement) == SQLITE_ROW {
-                let ident = String(cString: sqlite3_column_text(statement, 0))
-                let length = sqlite3_column_double(statement, 1)
-                let width = sqlite3_column_double(statement, 2)
-                let latitude = sqlite3_column_double(statement, 3)
-                let longitude = sqlite3_column_double(statement, 4)
-
-                // Handle nullable columns
-                let elevation: Double? =
-                    sqlite3_column_type(statement, 5) == SQLITE_NULL
-                    ? nil : sqlite3_column_double(statement, 5)
-                let heading: Double? =
-                    sqlite3_column_type(statement, 6) == SQLITE_NULL
-                    ? nil : sqlite3_column_double(statement, 6)
-
-                let displacedThreshold = sqlite3_column_double(statement, 7)
-
-                let runway = Runway(
-                    airport_ident: airportIdent,
-                    ident: ident,
-                    length_ft: length,
-                    width_ft: width,
-                    latitude_deg: latitude,
-                    longitude_deg: longitude,
-                    elevation_ft: elevation,
-                    heading_degT: heading,
-                    displaced_threshold_ft: displacedThreshold
-                )
-                runways.append(runway)
+                // Rows without an identifier are unusable and skipped
+                if let runway = Self.runway(
+                    from: statement,
+                    airportIdent: airportIdent
+                ) {
+                    runways.append(runway)
+                }
             }
         }
 
