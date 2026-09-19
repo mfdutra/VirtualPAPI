@@ -709,7 +709,7 @@ struct AirportSelectionTests {
     }
 
     @Test("Calculate aiming point with no displacement")
-    func testCalculateAimingPointNoDisplacement() {
+    func testCalculateAimingPointNoDisplacement() throws {
         let selection = AirportSelection()
 
         let runway = Runway(
@@ -727,14 +727,14 @@ struct AirportSelectionTests {
         selection.selectedRunway = runway
         selection.aimingPoint = 0
 
-        let (lat, lon) = selection.calculateAimingPoint()
+        let (lat, lon) = try #require(selection.calculateAimingPoint())
 
         #expect(lat == 37.0)
         #expect(lon == -122.0)
     }
 
     @Test("Calculate aiming point with displaced threshold")
-    func testCalculateAimingPointWithDisplacement() {
+    func testCalculateAimingPointWithDisplacement() throws {
         let selection = AirportSelection()
 
         // Runway pointing north (heading 0)
@@ -753,7 +753,7 @@ struct AirportSelectionTests {
         selection.selectedRunway = runway
         selection.aimingPoint = 0
 
-        let (lat, lon) = selection.calculateAimingPoint()
+        let (lat, lon) = try #require(selection.calculateAimingPoint())
 
         // Should move north (latitude increases)
         #expect(lat > 37.0)
@@ -762,7 +762,7 @@ struct AirportSelectionTests {
     }
 
     @Test("Calculate aiming point with aiming point offset")
-    func testCalculateAimingPointWithAimingOffset() {
+    func testCalculateAimingPointWithAimingOffset() throws {
         let selection = AirportSelection()
 
         // Runway pointing east (heading 90)
@@ -781,7 +781,7 @@ struct AirportSelectionTests {
         selection.selectedRunway = runway
         selection.aimingPoint = 500  // 500 feet down the runway
 
-        let (lat, lon) = selection.calculateAimingPoint()
+        let (lat, lon) = try #require(selection.calculateAimingPoint())
 
         // Latitude should stay roughly the same for east heading
         #expect(abs(lat - 37.0) < 0.001)
@@ -790,7 +790,7 @@ struct AirportSelectionTests {
     }
 
     @Test("Calculate aiming point returns original when heading is nil")
-    func testCalculateAimingPointNoHeading() {
+    func testCalculateAimingPointNoHeading() throws {
         let selection = AirportSelection()
 
         let runway = Runway(
@@ -808,7 +808,7 @@ struct AirportSelectionTests {
         selection.selectedRunway = runway
         selection.aimingPoint = 500
 
-        let (lat, lon) = selection.calculateAimingPoint()
+        let (lat, lon) = try #require(selection.calculateAimingPoint())
 
         // Should return original coordinates when heading is missing
         #expect(lat == 37.0)
@@ -851,6 +851,75 @@ struct AirportSelectionTests {
         #expect(selection.targetLatitude == nil)
         #expect(selection.targetLongitude == nil)
         #expect(selection.aimingPoint == 500)
+    }
+
+    @Test("Clear after moving the aiming point slider")
+    func testClearAfterAimingPointChange() {
+        let selection = AirportSelection()
+
+        selection.setAirport(
+            Airport(
+                ident: "KSFO",
+                name: "San Francisco",
+                latitude_deg: 37.6213,
+                longitude_deg: -122.3790,
+                elevation_ft: 13
+            )
+        )
+        selection.setRunway(
+            Runway(
+                airport_ident: "KSFO",
+                ident: "28R",
+                length_ft: 11870,
+                width_ft: 200,
+                latitude_deg: 37.6213,
+                longitude_deg: -122.3790,
+                elevation_ft: 13,
+                heading_degT: 280,
+                displaced_threshold_ft: 0
+            )
+        )
+
+        // Move the aiming point slider: AirportSelectionView reacts to the
+        // change by recalculating the targets
+        selection.aimingPoint = 1200
+        selection.setTargets()
+
+        selection.clear()
+
+        // A change notification delivered after the runway is gone must not
+        // crash, nor resurrect any target
+        selection.setTargets()
+
+        #expect(selection.selectedAirport == nil)
+        #expect(selection.selectedRunway == nil)
+        #expect(selection.descentAngle == 3.0)
+        #expect(selection.targetElevation == nil)
+        #expect(selection.targetLatitude == nil)
+        #expect(selection.targetLongitude == nil)
+        #expect(selection.aimingPoint == 500)
+    }
+
+    @Test("Set targets with no runway selected is a no-op")
+    func testSetTargetsWithoutRunway() {
+        let selection = AirportSelection()
+
+        selection.setAirport(
+            Airport(
+                ident: "KSFO",
+                name: "San Francisco",
+                latitude_deg: 37.6213,
+                longitude_deg: -122.3790,
+                elevation_ft: 13
+            )
+        )
+
+        selection.setTargets()
+
+        #expect(selection.targetElevation == nil)
+        #expect(selection.targetLatitude == nil)
+        #expect(selection.targetLongitude == nil)
+        #expect(selection.calculateAimingPoint() == nil)
     }
 
     @Test("Set descent angle")

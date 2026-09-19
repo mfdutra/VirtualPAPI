@@ -263,7 +263,8 @@ The GDL90 protocol is a standard aviation data link protocol used by many portab
 ### Airport Selection and Target Calculation
 The `AirportSelection` class (AirportSelection.swift) manages destination configuration:
 - Stores selected airport and runway
-- Calculates final aiming point using `calculateAimingPoint()` (AirportSelection.swift:94-147)
+- Calculates final aiming point using `calculateAimingPoint()` (AirportSelection.swift:94-147), which returns `nil` when no runway is selected; `setTargets()` is likewise a no-op then, so a stray change notification (e.g. the aiming point slider's `.onChange` in AirportSelectionView) can't act on a cleared selection
+- `clear()` resets `aimingPoint` (and `descentAngle`) *before* nil'ing the airport/runway, so the `.onChange` that assignment triggers still sees a consistent selection
 - Accounts for displaced threshold + user-specified aiming point (default 500 ft)
 - Uses great circle calculation to project target point along runway heading
 - Updates `GenericLocation` with target coordinates for distance/bearing calculations
@@ -274,6 +275,7 @@ The glide slope deviation logic (GenericLocation.swift:222-244):
 - Calculates actual angle: `atan((altitude - targetElevation) / distanceInFeet) * 180 / π`
 - Deviation = actual angle - desired descent angle
 - Backstop: if distance is not positive or the deviation is non-finite, `updateAngleToDestination()` keeps the previous values, so NaN can never enter the EMA (which would otherwise stay NaN until `reset()` and peg the indicator, since `min`/`max` clamping doesn't catch NaN)
+- `updateLocationInfo()` and the helpers it calls (`updateAngleToDestination()`, `updateVerticalSpeedToDestination()`, `updateBearingToDestination()`) each guard on the optional target latitude/longitude/elevation and simply return when one is missing, instead of force-unwrapping what `updateLocationInfo()` already checked
 - Positive deviation = aircraft above glide slope (fly down)
 - Exponential Moving Average (EMA) smoothing applied: `EMA_new = alpha * current + (1 - alpha) * EMA_previous`
   - Alpha configurable via `AppSettings.emaAlpha` (0.2 = smooth, 1.0 = instantaneous)

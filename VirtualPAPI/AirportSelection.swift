@@ -56,7 +56,8 @@ class AirportSelection: ObservableObject {
     }
 
     func setTargets() {
-        let runway = self.selectedRunway!
+        // No runway selected: nothing to aim at, leave the targets alone
+        guard let runway = self.selectedRunway else { return }
 
         // Some runways don't have elevation information
         // Default to the airport elevation
@@ -67,8 +68,9 @@ class AirportSelection: ObservableObject {
         }
 
         // Move the target according to displacement threshold and selected aiming point
-        (self.targetLatitude, self.targetLongitude) =
-            calculateAimingPoint()
+        if let aimingPoint = calculateAimingPoint() {
+            (self.targetLatitude, self.targetLongitude) = aimingPoint
+        }
     }
 
     func setRunway(_ runway: Runway) {
@@ -82,22 +84,26 @@ class AirportSelection: ObservableObject {
     }
 
     func clear() {
+        // Reset aimingPoint first: AirportSelectionView watches it and calls
+        // setTargets() on change, so changing it after the runway is cleared
+        // would recalculate the targets with no runway selected
+        self.aimingPoint = 500
+        self.descentAngle = 3.0
         self.selectedAirport = nil
         self.selectedRunway = nil
-        self.descentAngle = 3.0
         self.targetElevation = nil
         self.targetLatitude = nil
         self.targetLongitude = nil
-        self.aimingPoint = 500
     }
 
     /// Calculates the final aiming point, considering the desired aiming
     /// point plus the displaced threshold of the runway
-    /// - Returns: A tuple containing the latitude and longitude of the aiming point
+    /// - Returns: A tuple containing the latitude and longitude of the aiming
+    ///   point, or nil if no runway is selected
     func calculateAimingPoint() -> (
         latitude: Double, longitude: Double
-    ) {
-        let runway = self.selectedRunway!
+    )? {
+        guard let runway = self.selectedRunway else { return nil }
 
         // If there's nothing to calculate, return the runway's original coordinates
         guard runway.displaced_threshold_ft > 0 || self.aimingPoint > 0 else {

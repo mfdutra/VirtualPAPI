@@ -192,13 +192,14 @@ class GenericLocation: ObservableObject {
         guard let airport = self.airportSelection else { return }
 
         guard
-            (airport.targetLatitude != nil) && (airport.targetLongitude != nil)
-                && (airport.targetElevation != nil)
+            let targetLatitude = airport.targetLatitude,
+            let targetLongitude = airport.targetLongitude,
+            airport.targetElevation != nil
         else { return }
 
         self.distanceToDestination = distance(
-            otherLatitude: airport.targetLatitude!,
-            otherLongitude: airport.targetLongitude!
+            otherLatitude: targetLatitude,
+            otherLongitude: targetLongitude
         )
         updateAngleToDestination()
         updateVerticalSpeedToDestination()
@@ -208,11 +209,16 @@ class GenericLocation: ObservableObject {
     }
 
     private func updateBearingToDestination() {
+        guard let airportSelection = self.airportSelection,
+            let targetLatitude = airportSelection.targetLatitude,
+            let targetLongitude = airportSelection.targetLongitude
+        else { return }
+
         self.bearingToDestination = heading(
             from: latitude,
             longitude,
-            to: airportSelection!.targetLatitude!,
-            airportSelection!.targetLongitude!
+            to: targetLatitude,
+            targetLongitude
         )
 
         // Calculate relative bearing (where destination is relative to current track)
@@ -236,15 +242,19 @@ class GenericLocation: ObservableObject {
     }
 
     func updateAngleToDestination() {
+        guard let airportSelection = self.airportSelection,
+            let targetElevation = airportSelection.targetElevation
+        else { return }
+
         let distanceInFeet = self.distanceToDestination * 6076.1155
-        let altToLose = altitude - (self.airportSelection?.targetElevation)!
+        let altToLose = altitude - targetElevation
 
         // Backstop: a non-finite deviation would poison the EMA below until
         // the next reset(), and min/max clamping doesn't catch NaN (it pegs
         // the indicator full scale). Keep the previous values instead.
         guard distanceInFeet > 0 else { return }
         let angleToDestination = atan(altToLose / distanceInFeet) * 180 / .pi
-        let angleDeviation = angleToDestination - airportSelection!.descentAngle
+        let angleDeviation = angleToDestination - airportSelection.descentAngle
         guard angleDeviation.isFinite else { return }
 
         self.angleToDestination = angleToDestination
@@ -269,9 +279,12 @@ class GenericLocation: ObservableObject {
     // Vertical speed required to fly a straight line from the current
     // position and altitude to the target, at the current ground speed
     private func updateVerticalSpeedToDestination() {
+        guard let targetElevation = self.airportSelection?.targetElevation
+        else { return }
+
         self.verticalSpeedToDestination = GenericLocation.requiredVerticalSpeed(
             altitude: altitude,
-            targetElevation: (self.airportSelection?.targetElevation)!,
+            targetElevation: targetElevation,
             distance: self.distanceToDestination,
             groundSpeed: self.groundSpeed
         )
