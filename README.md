@@ -6,7 +6,7 @@ This app provides an adjustable visual descent guidance for every runway on the 
 
 The glide slope will provide accurate vertical guidance to the aiming point from any direction, 360 degrees, providing valuable guidance for any type of approach, like base entries, short approaches, straight-ins, etc.
 
-The app comes with over 30 thousand runways in its offline database, and more will be added as they are discovered. The app works completely offline and never tries to use the internet. All it needs is access to your location.
+The app comes with over 30 thousand runways in its offline database, and more will be added as they are discovered. The app works completely offline: approach guidance never needs the internet. It only goes online if you tap the button to update the airport database, or use the optional map features in Settings. All it needs is access to your location.
 
 You can find it on the [Apple's App Store](https://apps.apple.com/us/app/virtual-papi/id6755373746).
 
