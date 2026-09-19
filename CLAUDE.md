@@ -237,8 +237,9 @@ The GDL90 protocol is a standard aviation data link protocol used by many portab
 **Framing and Validation:**
 - Messages framed with 0x7E flag bytes
 - Byte stuffing: 0x7D escape byte followed by XOR 0x20
-- CRC-16-CCITT validation with table-driven lookup (polynomial 0x1021)
+- CRC-16-CCITT validation with table-driven lookup (polynomial 0x1021). Note this is the GDL90 spec's own variant (`crc = Table[crc >> 8] ^ (crc << 8) ^ byte`), not standard CRC-16/CCITT, which folds the data byte into the table index instead
 - Validates CRC before processing any message
+- Framing, unstuffing, CRC rejection and field decoding are covered by the "GDL90 Parser Tests" suite (`VirtualPAPITests/GDL90ParserTests.swift`), which drives the internal `processGDL90Data(_:)` with frames built by its own `GDL90TestFrame` helper. That helper derives the CRC table from the polynomial instead of reusing `GDL90Reader`'s hard-coded one, and is anchored to the heartbeat example in the spec, so a wrong table in either place would fail
 
 **Message Parsing:**
 - Message ID 10 (Ownship Report): Position, pressure altitude, ground speed, track
@@ -320,6 +321,8 @@ Note: Not all views require all environment objects. Check the view's `@Environm
 Tests use Swift Testing. `.serialized` only orders tests *within* a suite; separate suites still run in parallel, so any state shared across suites is a race. In particular, never construct `AppSettings()` in tests: it reads and writes `UserDefaults.standard`, and a setter in one suite (e.g. `locationSource = .xPlane`) can leak into another suite's "default values" assertions. Use `AppSettings(defaults: .isolatedForTesting())` (a fresh, UUID-named suite), or, in `AppSettingsTests`, the per-test `defaults` store that the suite's `init`/`deinit` create and remove.
 
 Tests that construct or touch a main-actor-isolated type (`GenericLocation`, `AirportSelection`, the readers) must be annotated `@MainActor` — on the suite (as `XGPSDataReaderTests` does) or on the individual test. Without it an `async` test body lands in a nonisolated context and every property access warns ("main actor-isolated property ... can not be mutated from a nonisolated context"), which is an error in the Swift 6 language mode. Once the test is `@MainActor`, drop the `await` on synchronous isolated calls such as `selection.setTargets()`, or it warns in turn about a redundant `await`.
+
+Test files: `VirtualPAPITests/VirtualPAPITests.swift` (everything except GDL90 framing) and `VirtualPAPITests/GDL90ParserTests.swift` (GDL90 wire-format parsing plus the `GDL90TestFrame` frame builder). The test target is a file-system synchronized group, so new files in `VirtualPAPITests/` are picked up without editing the project file.
 
 ### Concurrency
 - `XGPSDataReader` and `GDL90Reader` use `@MainActor` to ensure all UI updates happen on main thread
