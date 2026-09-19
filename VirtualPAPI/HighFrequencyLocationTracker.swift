@@ -19,6 +19,7 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
     @Published var track: Double?  // course in degrees (0-360)
     @Published var isTracking = false
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    private var isUpdatingLocation = false
 
     var appSettings: AppSettings?
     var genericLocation: GenericLocation?
@@ -45,7 +46,11 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
             return
         }
 
+        // Idempotent: the authorization callback may call this again
+        guard !isUpdatingLocation else { return }
+
         isTracking = true
+        isUpdatingLocation = true
         // Continuous updates at the best accuracy with no distance filter.
         // Safe to call repeatedly (e.g. on authorization changes).
         locationManager.startUpdatingLocation()
@@ -53,6 +58,11 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
 
     func stopTracking() {
         isTracking = false
+        stopLocationUpdates()
+    }
+
+    private func stopLocationUpdates() {
+        isUpdatingLocation = false
         locationManager.stopUpdatingLocation()
     }
 
@@ -118,10 +128,8 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
         print("Location error: \(error.localizedDescription)")
     }
 
-    func locationManager(
-        _ manager: CLLocationManager,
-        didChangeAuthorization status: CLAuthorizationStatus
-    ) {
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
         DispatchQueue.main.async {
             self.authorizationStatus = status
 
@@ -130,7 +138,9 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
                     self.startTracking()
                 }
             } else if status == .denied || status == .restricted {
-                self.stopTracking()
+                // Keep isTracking so updates resume if permission is
+                // granted later (e.g. from the Settings app)
+                self.stopLocationUpdates()
             }
         }
     }

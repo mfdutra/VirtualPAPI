@@ -98,6 +98,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 **Internal GPS** (`LocationSource.internalGPS`):
 - `HighFrequencyLocationTracker` uses CoreLocation continuous updates (`startUpdatingLocation()` with `kCLLocationAccuracyBest` and `kCLDistanceFilterNone`, ~1 Hz); no timer or `requestLocation()` polling, so repeated `startTracking()` calls (e.g. on authorization changes) are harmless
 - Instantiated in VirtualPAPIApp and starts tracking on app launch (VirtualPAPIApp.swift:40-41)
+- Authorization handled via `locationManagerDidChangeAuthorization(_:)` (reads `manager.authorizationStatus`; the deprecated `didChangeAuthorization:` callback is not used). On first launch `startTracking()` only requests permission and records intent (`isTracking = true`); the callback starts updates once authorized. `startTracking()` is idempotent (private `isUpdatingLocation` guard), so the callback re-invoking it never starts updates twice. Denied/restricted stops updates but keeps `isTracking`, so tracking resumes if permission is later granted in Settings
 - Updates `GenericLocation` with position, speed, and track data
 - Runs continuously but only updates GenericLocation when selected as active source
 
