@@ -106,9 +106,9 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 **X-Plane Simulator** (`LocationSource.xPlane`):
 - `XGPSDataReader` listens on UDP port 49002 for XGPS format packets
 - Uses a raw BSD socket (not `NWListener`) that never calls `connect()`, so it can't steal broadcast packets from other apps listening on the same port (e.g. ForeFlight) — see "Concurrency" below
-- Parses lat/lon/alt/speed/track from comma-separated ASCII data via the pure `nonisolated static func XGPSDataReader.parseXGPS(_:)` (XGPSDataReader.swift:119-157); malformed packets are dropped
+- Parses lat/lon/alt/speed/track from comma-separated ASCII data via the pure `nonisolated static func XGPSDataReader.parseXGPS(_:)` (XGPSDataReader.swift:94-122); malformed packets are dropped
 - Converts altitude from meters to feet (×3.2808399) and speed from m/s to knots (×1.9438445)
-- Updates `GenericLocation` only when X-Plane is the selected source (XGPSDataReader.swift:108)
+- Updates `GenericLocation` only when X-Plane is the selected source (XGPSDataReader.swift:69)
 
 **GDL90 Devices** (`LocationSource.gdl90`):
 - `GDL90Reader` listens on UDP port 4000 for GDL90-formatted packets, plus port 43211 on a best-effort basis (if binding 43211 fails, it keeps listening on 4000 only; if 4000 fails, nothing is started)
@@ -119,7 +119,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 - Parses Message ID 11 (Ownship Geometric Altitude) for geometric altitude
 - Altitude fed to `GenericLocation` is geometric (Msg 11) when one arrived within the last `GDL90Reader.geometricAltitudeMaxAge` (3 s), otherwise pressure altitude (Msg 10) as a fallback — see "Altitude datum selection" below
 - Broadcasts UDP heartbeat on port 63093 (via `NWConnection`) to advertise availability to GDL90 devices
-- Updates `GenericLocation` only when GDL90 is the selected source (GDL90Reader.swift:199)
+- Updates `GenericLocation` only when GDL90 is the selected source (GDL90Reader.swift:200)
 
 **GenericLocation** acts as the single source of truth for the UI and contains:
 - Current position (lat/lon/alt), speed, and track
@@ -218,7 +218,7 @@ These match the SQLite schema in `scripts/aviation.db`.
 ## Key Implementation Details
 
 ### X-Plane UDP Integration
-The XGPS protocol expects packets starting with "XGPS" header followed by comma-separated values. The parser is the pure `nonisolated static func parseXGPS(_ data: Data) -> XGPSFix?` (XGPSDataReader.swift:119-157), called by `processXGPSData(_:)` (XGPSDataReader.swift:159-170), and unit-tested directly ("XGPS Parser Tests" suite):
+The XGPS protocol expects packets starting with "XGPS" header followed by comma-separated values. The parser is the pure `nonisolated static func parseXGPS(_ data: Data) -> XGPSFix?` (XGPSDataReader.swift:94-122), called by `processXGPSData(_:)` (XGPSDataReader.swift:124-135), and unit-tested directly ("XGPS Parser Tests" suite):
 1. Validates 41+ byte packets with "XGPS" header and at least 6 comma-separated fields
 2. Extracts longitude (component 1), latitude (component 2), altitude in meters (component 3), track in degrees (component 4), speed in m/s (component 5); fields are trimmed of whitespace/control characters
 3. Rejects the whole packet (returns `nil`, no state update) if any of those fields isn't numeric — never substitutes 0 — or is non-finite (`Double(String)` accepts "nan"/"inf"/hex floats)
@@ -227,12 +227,12 @@ The XGPS protocol expects packets starting with "XGPS" header followed by comma-
 6. Converts speed from m/s to knots (×1.9438445) and normalizes track to 0..<360
 7. `processXGPSData` updates both `XGPSDataReader` and `GenericLocation` states (only when X-Plane is selected source)
 
-**Why a raw BSD socket instead of `NWListener`:** `NWListener`'s UDP mode creates a per-sender `NWConnection` by internally `connect()`-ing a socket to the remote address ("established-over-unconnected"). On BSD-derived kernels, a connected socket takes delivery priority over other apps' plain wildcard-bound listening sockets on the same port, so this used to silently steal X-Plane's broadcast packets away from apps like ForeFlight running at the same time. `XGPSDataReader.startListening()` (XGPSDataReader.swift:27-73) instead opens a raw socket with `SO_REUSEADDR`/`SO_REUSEPORT`, binds to `INADDR_ANY:49002`, and only ever calls `recvfrom()` on a dedicated background `Thread` — never `connect()` — so it behaves like a normal passive listener and coexists with other apps.
+**Why a raw BSD socket instead of `NWListener`:** `NWListener`'s UDP mode creates a per-sender `NWConnection` by internally `connect()`-ing a socket to the remote address ("established-over-unconnected"). On BSD-derived kernels, a connected socket takes delivery priority over other apps' plain wildcard-bound listening sockets on the same port, so this used to silently steal X-Plane's broadcast packets away from apps like ForeFlight running at the same time. `XGPSDataReader.startListening()` (XGPSDataReader.swift:26-52) instead uses a `UDPReceiver` (UDPReceiveLoop.swift), which opens a raw socket with `SO_REUSEADDR`/`SO_REUSEPORT`, binds to `INADDR_ANY:49002`, and only ever calls `recvfrom()` on a dedicated background `Thread` — never `connect()` — so it behaves like a normal passive listener and coexists with other apps.
 
 ### GDL90 Protocol Integration
 The GDL90 protocol is a standard aviation data link protocol used by many portable GPS and ADS-B receivers. The implementation (GDL90Reader.swift):
 
-**Receiving:** Uses the same raw BSD socket / `recvfrom()` approach as `XGPSDataReader` (GDL90Reader.swift:49-114) for the same reason — avoids stealing UDP broadcast packets from other GDL90-consuming apps on port 4000. The outbound heartbeat broadcast (below) is unaffected and still uses `NWConnection`, since sending isn't subject to this issue.
+**Receiving:** Uses the same `UDPReceiver` raw BSD socket / `recvfrom()` approach as `XGPSDataReader` (GDL90Reader.swift:71-113) for the same reason — avoids stealing UDP broadcast packets from other GDL90-consuming apps on port 4000. The outbound heartbeat broadcast (below) is unaffected and still uses `NWConnection`, since sending isn't subject to this issue.
 
 **Framing and Validation:**
 - Messages framed with 0x7E flag bytes
@@ -323,9 +323,13 @@ Tests that construct or touch a main-actor-isolated type (`GenericLocation`, `Ai
 
 ### Concurrency
 - `XGPSDataReader` and `GDL90Reader` use `@MainActor` to ensure all UI updates happen on main thread
-- UDP receiving uses raw BSD sockets (`socket`/`bind`/`recvfrom`), each with its own dedicated background `Thread` running a blocking `nonisolated` receive loop (`receiveLoop(fd:)`) — not `NWListener`/`DispatchQueue`, to avoid the socket-priority issue described above
-- Both readers' `receiveLoop(fd:)` delegate to the shared `nonisolated func runUDPReceiveLoop(fd:label:onDatagram:)` (UDPReceiveLoop.swift). It skips zero-length datagrams (for UDP, `recvfrom` returning 0 is an empty datagram, not EOF), retries on `EINTR`/`EAGAIN`/`EWOULDBLOCK`, and returns only on a fatal error (e.g. `EBADF` once `stopListening()` has closed the socket; other errors are logged)
-- When the loop returns, the reader hops to the main actor and checks whether that thread is still registered (`receiveThread` / `receiveThreads`, compared by identity via `ObjectIdentifier`, since `Thread` is not `Sendable` and can't be captured in the `@MainActor` closure). `stopListening()` clears those first, so an intentional stop is a no-op; otherwise the exit was unexpected and is surfaced: `XGPSDataReader` calls `stopListening()` (so `isConnected = false`); `GDL90Reader` drops and closes just that socket, and calls `stopListening()` (which sets `isConnected = false` and stops the heartbeat) only once no receive loops remain, since 4000 and 43211 are independent
+- UDP receiving uses raw BSD sockets (`socket`/`bind`/`recvfrom`), each with its own dedicated background `Thread` running a blocking receive loop — not `NWListener`/`DispatchQueue`, to avoid the socket-priority issue described above
+- Both readers own their sockets through `nonisolated final class UDPReceiver` (UDPReceiveLoop.swift): `UDPReceiver.open(port:label:)` creates, configures and binds the socket plus a self-pipe, `start(onDatagram:onUnexpectedExit:)` spawns the receive thread, `stop()` shuts it down. `XGPSDataReader` keeps one (`receiver`), `GDL90Reader` an array (`receivers`, one per port); neither touches a raw descriptor
+- The loop `poll()`s the socket and the pipe's read end together, so it sleeps until something happens (no timeout polling, no busy-waiting). It skips zero-length datagrams (for UDP, `recvfrom` returning 0 is an empty datagram, not EOF), retries on `EINTR`/`EAGAIN`/`EWOULDBLOCK`, and otherwise returns `true` when woken by the pipe (deliberate stop) or `false` on a fatal socket error (logged)
+- **Shutdown protocol.** `stop()` writes one byte to the pipe, waits (bounded, 2 s) for the receive thread to signal a `DispatchSemaphore` as it finishes, and only then closes the socket and the pipe. Closing a descriptor does *not* reliably interrupt a `recvfrom()` already blocked on it on Darwin, so closing first could leave the thread parked on a descriptor number the kernel later recycles for something else. `stop()` is idempotent, safe before `start()`, and returns with the port free, so stop → start restarts (including GDL90's two ports) work immediately. In the unreachable case where the thread doesn't exit in time, the descriptors are deliberately leaked (and logged) rather than recycled
+- No deadlock: the receive thread signals the semaphore *before* invoking `onUnexpectedExit`, and both readers' callbacks only enqueue `Task { @MainActor ... }`, so a `stop()` called from the main actor never waits on work that needs the main actor. Those `Task`s repeat the `[weak self]` capture (`Task { @MainActor [weak self] in ... }`) rather than reading the enclosing closure's weak `self`: a weak capture is a mutable var, and referencing it from the concurrently-executing `Task` is an error in the Swift 6 language mode. The thread also holds a strong reference to its `UDPReceiver`, so the descriptors stay valid for as long as the loop can use them
+- `onUnexpectedExit` fires only when the loop ended on its own, so a deliberate stop stays quiet. It hops to the main actor and re-checks that the receiver is still registered (compared by identity, since `stopListening()` clears the references first): `XGPSDataReader` calls `stopListening()` (so `isConnected = false`); `GDL90Reader` drops and stops just that receiver, and calls `stopListening()` (which sets `isConnected = false` and stops the heartbeat) only once no receive loops remain, since 4000 and 43211 are independent
+- Covered by the "UDP Receiver Tests" and "Listener Lifecycle Tests" suites (delivery, prompt stop, restart cycles, idempotent stop, quiet deliberate stop, `isConnected` across start/stop cycles)
 - `GDL90Reader` still keeps `DispatchQueue(label: "gdl90-udp-queue")` for its outbound heartbeat broadcast (`NWConnection`-based `sendBroadcast()`), which is unrelated to receiving
 - Location updates use `Task { @MainActor in ... }` to hop back from the receive thread for thread-safe UI updates
 - Repeating timers (GenericLocation's 1 Hz update and 5 s staleness check, GDL90Reader's heartbeat) are created with `Timer(timeInterval:repeats:block:)` and added via `RunLoop.main.add(_, forMode: .common)`, not `Timer.scheduledTimer`, which installs in `.default` mode only and stops firing while the main run loop is in tracking mode (scrolling, dragging a slider) — freezing the guidance display. Add any new timer the same way

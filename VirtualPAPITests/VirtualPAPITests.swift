@@ -5,6 +5,7 @@
 //  Created by Marlon Dutra on 11/15/25.
 //
 
+import Darwin
 import Foundation
 import SQLite3
 import Testing
@@ -2143,5 +2144,129 @@ struct LocalIPAddressTests {
     func testLocalIPAddressIsRepeatable() {
         let results = (0..<10).map { _ in SettingsView.localIPAddress() }
         #expect(Set(results.map { $0 ?? "nil" }).count == 1)
+    }
+}
+
+// MARK: - UDP Receiver Tests
+
+@Suite("UDP Receiver Tests")
+struct UDPReceiverTests {
+
+    /// A random high port per test: parallel test processes set SO_REUSEPORT
+    /// too, and would otherwise steal each other's datagrams.
+    private func testPort() -> UInt16 { UInt16.random(in: 50_000...60_000) }
+
+    private func sendDatagram(_ bytes: [UInt8], toPort port: UInt16) {
+        let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        guard fd >= 0 else { return }
+        defer { close(fd) }
+
+        var addr = sockaddr_in()
+        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(port).bigEndian
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+
+        _ = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                bytes.withUnsafeBufferPointer { buffer in
+                    sendto(
+                        fd, buffer.baseAddress, buffer.count, 0, sockaddrPtr,
+                        socklen_t(MemoryLayout<sockaddr_in>.size))
+                }
+            }
+        }
+    }
+
+    @Test("Datagrams are delivered and stop() ends the loop promptly")
+    func testDeliveryAndStop() throws {
+        let port = testPort()
+        let receiver = try #require(UDPReceiver.open(port: port, label: "TEST"))
+        let received = DispatchSemaphore(value: 0)
+        receiver.start(onDatagram: { _ in received.signal() }, onUnexpectedExit: {})
+
+        sendDatagram([0x01, 0x02, 0x03], toPort: port)
+        #expect(received.wait(timeout: .now() + 5) == .success)
+
+        let started = Date()
+        receiver.stop()
+        #expect(Date().timeIntervalSince(started) < 1.0)
+    }
+
+    @Test("Start/stop cycles free the port for an immediate restart")
+    func testRestartCycles() throws {
+        let port = testPort()
+
+        for _ in 0..<3 {
+            let receiver = try #require(UDPReceiver.open(port: port, label: "TEST"))
+            let received = DispatchSemaphore(value: 0)
+            receiver.start(onDatagram: { _ in received.signal() }, onUnexpectedExit: {})
+
+            sendDatagram([0x01], toPort: port)
+            #expect(received.wait(timeout: .now() + 5) == .success)
+            receiver.stop()
+        }
+    }
+
+    @Test("A deliberate stop is not reported as an unexpected exit")
+    func testDeliberateStopIsQuiet() throws {
+        let port = testPort()
+        let receiver = try #require(UDPReceiver.open(port: port, label: "TEST"))
+        let unexpectedExit = DispatchSemaphore(value: 0)
+        let received = DispatchSemaphore(value: 0)
+        receiver.start(
+            onDatagram: { _ in received.signal() },
+            onUnexpectedExit: { unexpectedExit.signal() }
+        )
+
+        // Make sure the loop is actually running before stopping it.
+        sendDatagram([0x01], toPort: port)
+        #expect(received.wait(timeout: .now() + 5) == .success)
+
+        receiver.stop()
+        #expect(unexpectedExit.wait(timeout: .now() + 0.2) == .timedOut)
+    }
+
+    @Test("stop() is idempotent, with or without a receive thread")
+    func testStopIsIdempotent() throws {
+        let neverStarted = try #require(UDPReceiver.open(port: testPort(), label: "TEST"))
+        neverStarted.stop()
+        neverStarted.stop()
+
+        let started = try #require(UDPReceiver.open(port: testPort(), label: "TEST"))
+        started.start(onDatagram: { _ in }, onUnexpectedExit: {})
+        started.stop()
+        started.stop()
+    }
+}
+
+// MARK: - Listener Lifecycle Tests
+
+@Suite("Listener Lifecycle Tests")
+@MainActor
+struct ListenerLifecycleTests {
+
+    @Test("XGPSDataReader start/stop cycles keep isConnected consistent")
+    func testXGPSStartStopCycles() {
+        let reader = XGPSDataReader()
+
+        for _ in 0..<3 {
+            reader.startListening()
+            #expect(reader.isConnected)
+            reader.stopListening()
+            #expect(!reader.isConnected)
+        }
+    }
+
+    @Test("GDL90Reader start/stop cycles keep isConnected consistent")
+    func testGDL90StartStopCycles() {
+        let reader = GDL90Reader()
+
+        for _ in 0..<3 {
+            reader.startListening()
+            #expect(reader.isConnected)
+            reader.stopListening()
+            #expect(!reader.isConnected)
+        }
     }
 }

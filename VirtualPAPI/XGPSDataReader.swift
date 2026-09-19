@@ -12,93 +12,50 @@ class XGPSDataReader: ObservableObject {
     @Published var isConnected: Bool = false
     @Published var lastUpdateTime: Date = Date()
 
-    private var socketFD: Int32 = -1
-    private var receiveThread: Thread?
+    private static let listenPort: UInt16 = 49002
+
+    private var receiver: UDPReceiver?
 
     var genericLocation: GenericLocation?
     var appSettings: AppSettings?
 
     deinit {
-        if socketFD >= 0 {
-            close(socketFD)
-        }
+        receiver?.stop()
     }
 
     func startListening() {
-        guard socketFD < 0 else { return }  // already listening
-        let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-        guard fd >= 0 else {
-            print("XGPS: failed to create socket: \(String(cString: strerror(errno)))")
+        guard receiver == nil else { return }  // already listening
+        guard let receiver = UDPReceiver.open(port: Self.listenPort, label: "XGPS") else {
             return
         }
 
-        // Never call connect() on this socket: a "connected" socket takes
-        // priority over other apps' plain listening sockets for matching
-        // packets, which would steal broadcast traffic from them.
-        var reuseAddr: Int32 = 1
-        setsockopt(
-            fd, SOL_SOCKET, SO_REUSEADDR, &reuseAddr,
-            socklen_t(MemoryLayout<Int32>.size))
-        var reusePort: Int32 = 1
-        setsockopt(
-            fd, SOL_SOCKET, SO_REUSEPORT, &reusePort,
-            socklen_t(MemoryLayout<Int32>.size))
-
-        var addr = sockaddr_in()
-        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = in_port_t(49002).bigEndian
-        addr.sin_addr.s_addr = INADDR_ANY
-
-        let bindResult = withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                bind(fd, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
-            }
-        }
-
-        guard bindResult == 0 else {
-            print("XGPS: bind failed: \(String(cString: strerror(errno)))")
-            close(fd)
-            return
-        }
-
-        socketFD = fd
+        self.receiver = receiver
         isConnected = true
 
-        let thread = Thread { [weak self] in
-            self?.receiveLoop(fd: fd)
-        }
-        thread.name = "xgps-udp-receive"
-        thread.start()
-        receiveThread = thread
-    }
-
-    private nonisolated func receiveLoop(fd: Int32) {
-        runUDPReceiveLoop(fd: fd, label: "XGPS") { data in
-            Task { @MainActor [weak self] in
-                self?.processXGPSData(data)
+        receiver.start(
+            onDatagram: { [weak self] data in
+                Task { @MainActor [weak self] in
+                    self?.processXGPSData(data)
+                }
+            },
+            onUnexpectedExit: { [weak self] in
+                // Reported only when the loop ended on a fatal socket error,
+                // never on a deliberate stop, so surface the failure instead
+                // of silently going quiet.
+                Task { @MainActor [weak self] in
+                    guard let self, self.receiver === receiver else { return }
+                    print("XGPS: receive loop exited unexpectedly")
+                    self.stopListening()
+                }
             }
-        }
-
-        // The loop only returns on a fatal socket error. If this thread is
-        // still the active receiver, stopListening() didn't cause it, so
-        // surface the failure instead of silently going quiet.
-        let threadID = ObjectIdentifier(Thread.current)
-        Task { @MainActor [weak self] in
-            guard let self,
-                self.receiveThread.map(ObjectIdentifier.init) == threadID
-            else { return }
-            print("XGPS: receive loop exited unexpectedly")
-            self.stopListening()
-        }
+        )
     }
 
     func stopListening() {
-        if socketFD >= 0 {
-            close(socketFD)
-            socketFD = -1
-        }
-        receiveThread = nil
+        // stop() returns only once the receive thread has exited and the
+        // socket is closed, so a restart can rebind immediately.
+        receiver?.stop()
+        receiver = nil
         isConnected = false
     }
 

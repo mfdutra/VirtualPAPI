@@ -55,8 +55,7 @@ class GDL90Reader: ObservableObject {
     // back to pressure altitude
     static let geometricAltitudeMaxAge: TimeInterval = 3.0
 
-    private var socketFDs: [Int32] = []
-    private var receiveThreads: [Thread] = []
+    private var receivers: [UDPReceiver] = []
     private var broadcastTimer: Timer?
     private let queue = DispatchQueue(label: "gdl90-udp-queue")
 
@@ -64,110 +63,62 @@ class GDL90Reader: ObservableObject {
     var appSettings: AppSettings?
 
     deinit {
-        socketFDs.forEach { close($0) }
+        receivers.forEach { $0.stop() }
         broadcastTimer?.invalidate()
         broadcastTimer = nil
     }
 
     func startListening() {
-        guard socketFDs.isEmpty else { return }  // already listening
-        guard let primaryFD = openListeningSocket(port: Self.primaryPort) else {
+        guard receivers.isEmpty else { return }  // already listening
+        guard let primary = UDPReceiver.open(port: Self.primaryPort, label: "GDL90") else {
             return
         }
-        startReceiveThread(fd: primaryFD, port: Self.primaryPort)
+        startReceiving(primary)
         isConnected = true
 
         // Best effort: if the secondary port fails, keep going with the primary.
-        if let secondaryFD = openListeningSocket(port: Self.secondaryPort) {
-            startReceiveThread(fd: secondaryFD, port: Self.secondaryPort)
+        if let secondary = UDPReceiver.open(port: Self.secondaryPort, label: "GDL90") {
+            startReceiving(secondary)
         }
 
         startBroadcastHeartbeat()
     }
 
-    private func openListeningSocket(port: UInt16) -> Int32? {
-        let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-        guard fd >= 0 else {
-            print("GDL90: failed to create socket for port \(port): \(String(cString: strerror(errno)))")
-            return nil
-        }
+    private func startReceiving(_ receiver: UDPReceiver) {
+        receivers.append(receiver)
 
-        // Never call connect() on this socket: a "connected" socket takes
-        // priority over other apps' plain listening sockets for matching
-        // packets, which would steal broadcast traffic from them.
-        var reuseAddr: Int32 = 1
-        setsockopt(
-            fd, SOL_SOCKET, SO_REUSEADDR, &reuseAddr,
-            socklen_t(MemoryLayout<Int32>.size))
-        var reusePort: Int32 = 1
-        setsockopt(
-            fd, SOL_SOCKET, SO_REUSEPORT, &reusePort,
-            socklen_t(MemoryLayout<Int32>.size))
-
-        var addr = sockaddr_in()
-        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = in_port_t(port).bigEndian
-        addr.sin_addr.s_addr = INADDR_ANY
-
-        let bindResult = withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                bind(fd, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+        receiver.start(
+            onDatagram: { [weak self] data in
+                Task { @MainActor [weak self] in
+                    self?.processGDL90Data(data)
+                }
+            },
+            onUnexpectedExit: { [weak self] in
+                // Reported only when the loop ended on a fatal socket error,
+                // never on a deliberate stop: drop this socket, and mark
+                // disconnected once no receive loops remain.
+                Task { @MainActor [weak self] in
+                    guard let self,
+                        let index = self.receivers.firstIndex(where: { $0 === receiver })
+                    else { return }
+                    print("GDL90: receive loop for port \(receiver.port) exited unexpectedly")
+                    self.receivers.remove(at: index)
+                    receiver.stop()
+                    if self.receivers.isEmpty {
+                        self.stopListening()
+                    }
+                }
             }
-        }
-
-        guard bindResult == 0 else {
-            print("GDL90: bind to port \(port) failed: \(String(cString: strerror(errno)))")
-            close(fd)
-            return nil
-        }
-
-        return fd
-    }
-
-    private func startReceiveThread(fd: Int32, port: UInt16) {
-        socketFDs.append(fd)
-
-        let thread = Thread { [weak self] in
-            self?.receiveLoop(fd: fd)
-        }
-        thread.name = "gdl90-udp-receive-\(port)"
-        thread.start()
-        receiveThreads.append(thread)
-    }
-
-    private nonisolated func receiveLoop(fd: Int32) {
-        runUDPReceiveLoop(fd: fd, label: "GDL90") { data in
-            Task { @MainActor [weak self] in
-                self?.processGDL90Data(data)
-            }
-        }
-
-        // The loop only returns on a fatal socket error. If this thread is
-        // still registered, stopListening() didn't cause it: drop this
-        // socket, and mark disconnected once no receive loops remain.
-        let threadID = ObjectIdentifier(Thread.current)
-        Task { @MainActor [weak self] in
-            guard let self,
-                let index = self.receiveThreads.firstIndex(
-                    where: { ObjectIdentifier($0) == threadID })
-            else { return }
-            print("GDL90: receive loop for fd \(fd) exited unexpectedly")
-            self.receiveThreads.remove(at: index)
-            self.socketFDs.removeAll { $0 == fd }
-            close(fd)
-            if self.receiveThreads.isEmpty {
-                self.stopListening()
-            }
-        }
+        )
     }
 
     func stopListening() {
         broadcastTimer?.invalidate()
         broadcastTimer = nil
-        socketFDs.forEach { close($0) }
-        socketFDs = []
-        receiveThreads = []
+        // stop() returns only once each receive thread has exited and its
+        // socket is closed, so a restart can rebind both ports immediately.
+        receivers.forEach { $0.stop() }
+        receivers = []
         isConnected = false
         heartbeatStatus = .idle
     }
