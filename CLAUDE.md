@@ -50,9 +50,10 @@ This creates `aviation.db` with airports and runways tables. The script processe
 - `runways.csv`: Runway coordinates, headings, and displaced thresholds
 
 Filtering rules applied by the script:
-- Runways that are closed or have missing end coordinates or identifiers are skipped
+- Runways that are closed, have missing end coordinates or identifiers, or whose two ends share identical coordinates are skipped
 - Each runway end is stored as its own row; ends with no elevation data are skipped, so every runway in the database has an elevation
 - Airports left with no runways after this filtering are removed
+- Missing runway end headings are backfilled: when `le_heading_degT`/`he_heading_degT` is blank, the script stores the true initial great-circle bearing from that end's coordinates to the opposite end's (headings present in the CSV are kept as is). Since runways with identical end coordinates are skipped, every runway in the database has a heading, so `AirportSelection.calculateAimingPoint()` can always apply the displaced threshold and aiming point
 
 **Database Management:**
 - `DatabaseManager` (singleton) handles SQLite operations

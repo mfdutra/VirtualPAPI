@@ -7,9 +7,27 @@ Data from https://ourairports.com/data/
 import argparse
 import sqlite3
 import csv
+import math
 import os
 
 global args
+
+
+def initial_bearing(lat1, lon1, lat2, lon2):
+    """True initial great-circle bearing (0-360) from point 1 to point 2."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dlon = math.radians(lon2 - lon1)
+    y = math.sin(dlon) * math.cos(phi2)
+    x = math.cos(phi1) * math.sin(phi2) - \
+        math.sin(phi1) * math.cos(phi2) * math.cos(dlon)
+    return round(math.degrees(math.atan2(y, x)) % 360, 1)
+
+
+def heading(csv_heading, from_lat, from_lon, to_lat, to_lon):
+    """CSV heading when present, else computed from the runway end coordinates."""
+    if csv_heading:
+        return float(csv_heading)
+    return initial_bearing(from_lat, from_lon, to_lat, to_lon)
 
 
 def create_database(db_path='aviation.db'):
@@ -100,18 +118,21 @@ def create_database(db_path='aviation.db'):
             if row["closed"] == "1":
                 continue  # Skip closed runways
 
+            le_lat, le_lon = float(row['le_latitude_deg']), float(row['le_longitude_deg'])
+            he_lat, he_lon = float(row['he_latitude_deg']), float(row['he_longitude_deg'])
+
+            if (le_lat, le_lon) == (he_lat, he_lon):
+                continue  # Skip runways whose ends share identical coordinates
+
             side1 = (
                 row['airport_ident'],
                 row['le_ident'],
                 int(row['length_ft']) if row['length_ft'] else None,
                 int(row['width_ft']) if row['width_ft'] else None,
-                float(row['le_latitude_deg']
-                      ),
-                float(row['le_longitude_deg']
-                      ),
+                le_lat,
+                le_lon,
                 int(row['le_elevation_ft']) if row['le_elevation_ft'] else None,
-                float(row['le_heading_degT']
-                      ) if row['le_heading_degT'] else None,
+                heading(row['le_heading_degT'], le_lat, le_lon, he_lat, he_lon),
                 int(row['le_displaced_threshold_ft']
                     ) if row['le_displaced_threshold_ft'] else 0,
             )
@@ -121,13 +142,10 @@ def create_database(db_path='aviation.db'):
                 row['he_ident'],
                 int(row['length_ft']) if row['length_ft'] else None,
                 int(row['width_ft']) if row['width_ft'] else None,
-                float(row['he_latitude_deg']
-                      ),
-                float(row['he_longitude_deg']
-                      ),
+                he_lat,
+                he_lon,
                 int(row['he_elevation_ft']) if row['he_elevation_ft'] else None,
-                float(row['he_heading_degT']
-                      ) if row['he_heading_degT'] else None,
+                heading(row['he_heading_degT'], he_lat, he_lon, le_lat, le_lon),
                 int(row['he_displaced_threshold_ft']
                     ) if row['he_displaced_threshold_ft'] else 0
             )
