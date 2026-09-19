@@ -58,13 +58,15 @@ Filtering rules applied by the script:
 **Database Management:**
 - `DatabaseManager` (singleton) handles SQLite operations
 - Database copied from bundle to Documents directory on first launch
-- Supports remote database updates via `downloadRemoteDatabase()` method (TOTP-authenticated, ETag-cached). The update is transactional:
+- Supports remote database updates via `downloadRemoteDatabase()` method (TOTP-authenticated, ETag-cached, `@concurrent` so the network wait and file work run off the main thread). The update is transactional:
   1. Downloads to a temporary file (`URLSession.download(for:)`), rejecting anything over `maxDatabaseSize` (50 MB; bundled DB is ~3.5 MB) by Content-Length and by actual file size
   2. Validates the staged file (`Documents/aviation.db.download`) with `static func validateDatabase(at:)`: SQLite header magic, read-only open, `PRAGMA integrity_check` == "ok", `airports`/`runways` tables with the columns the app queries, and counts >= `minAirportCount` (5,000) / `minRunwayCount` (15,000) (bundled DB has ~11,400 / ~29,700)
-  3. Only then closes the live handle and swaps it in with `FileManager.replaceItemAt`, keeping the previous DB as `aviation.db.bak`; if reopening fails, the backup is restored
+  3. Only then calls `replaceDatabase(with:backupName:)`, which closes the live handle and swaps the staged file in with `FileManager.replaceItemAt`, keeping the previous DB as `aviation.db.bak`; if reopening fails, the backup is restored
   4. Stores the ETag and `last_database_download` only after a successful swap, so a failed update is retried next time
   - Failures surface as `DatabaseError` (a `LocalizedError`: `tooLarge`, `invalidDatabase`, `installFailed`, plus HTTP/URL errors), shown in SettingsView
   - Validation is unit-tested ("Database Validation Tests") against the bundled DB, HTML, empty, truncated, empty-tables and wrong-schema files
+- Thread-safe: `DatabaseManager` is `nonisolated final class ... @unchecked Sendable` (opted out of the default `MainActor` isolation) and serializes every access to the SQLite handle on a private serial `DispatchQueue`. Public methods (`getAirport`, `searchAirports`, `getRunways`, `getTableRowCounts`, `replaceDatabase(with:backupName:)`) wrap `queue.sync`; the private `fetch*`/`openDatabase`/`closeDatabase` helpers assume they're already on the queue (`dispatchPrecondition`) and must never call `queue.sync` themselves (deadlock)
+- `replaceDatabase(with:backupName:)` does close → swap file → reopen (→ roll back to the backup if the reopen or the row-count check fails) as one queue block, so concurrent queries wait instead of hitting a closed/nil handle; closing uses `sqlite3_close_v2` (never fails with `SQLITE_BUSY`/leaks the connection). The staging file must sit in Documents next to the live DB so the swap is an atomic same-volume rename
 - Provides query methods: `getAirport(ident:)`, `searchAirports()`, `getRunways(airportId:)`
 - Returns table counts for diagnostics
 
@@ -317,7 +319,8 @@ Tests use Swift Testing. `.serialized` only orders tests *within* a suite; separ
 - When the loop returns, the reader hops to the main actor and checks whether that thread is still registered (`receiveThread` / `receiveThreads`, compared by identity). `stopListening()` clears those first, so an intentional stop is a no-op; otherwise the exit was unexpected and is surfaced: `XGPSDataReader` calls `stopListening()` (so `isConnected = false`); `GDL90Reader` drops and closes just that socket, and calls `stopListening()` (which sets `isConnected = false` and stops the heartbeat) only once no receive loops remain, since 4000 and 43211 are independent
 - `GDL90Reader` still keeps `DispatchQueue(label: "gdl90-udp-queue")` for its outbound heartbeat broadcast (`NWConnection`-based `sendBroadcast()`), which is unrelated to receiving
 - Location updates use `Task { @MainActor in ... }` to hop back from the receive thread for thread-safe UI updates
-- Database operations in `DatabaseManager` are async/await capable for non-blocking updates
+- `DatabaseManager` is synchronous and callable from any thread/actor: all SQLite access is serialized on its private serial `DispatchQueue` (see "Database Management"). `downloadRemoteDatabase()` is `async` and `@concurrent`; the only main-actor hop is `getRemoteDatabaseURL()`, because `Secrets` is main-actor isolated by default
+- Note: the app target builds with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so unannotated types are main-actor isolated; types meant to be used off the main thread must be explicitly `nonisolated`
 
 ### Implemented Features
 The app includes fully implemented features for real-world aviation use:

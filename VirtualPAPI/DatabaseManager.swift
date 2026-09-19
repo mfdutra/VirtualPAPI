@@ -11,7 +11,7 @@ import SQLite3
 
 // MARK: - String Extension for Base32 Decoding
 
-extension String {
+nonisolated extension String {
     func leftPadding(toLength: Int, withPad character: Character) -> String {
         let stringLength = self.count
         if stringLength < toLength {
@@ -26,18 +26,29 @@ extension String {
 
 // MARK: - DatabaseManager
 
-class DatabaseManager {
+/// Thread-safe: every access to the SQLite handle (`db`) — open, close, all
+/// queries, and the close→replace→reopen during a remote update — runs on
+/// the private serial `queue`, so callers on any thread/actor wait for each
+/// other instead of racing on the handle. Public methods wrap `queue.sync`;
+/// private helpers that touch `db` assume they're already on `queue` (they
+/// must never call `queue.sync` themselves, which would deadlock).
+nonisolated final class DatabaseManager: @unchecked Sendable {
     static let shared = DatabaseManager()
 
+    private let queue = DispatchQueue(label: "database-manager-queue")
+
+    // Only accessed on `queue`
     private var db: OpaquePointer?
 
     private init() {
-        ensureDatabaseIsUpToDate()
-        openDatabase()
+        queue.sync {
+            ensureDatabaseIsUpToDate()
+            openDatabase()
+        }
     }
 
     deinit {
-        closeDatabase()
+        queue.sync { closeDatabase() }
     }
 
     /// Ensures the database in Documents directory exists and is up-to-date with the bundle version
@@ -226,6 +237,7 @@ class DatabaseManager {
     ///   }
     ///   ```
     ///   Replace YOUR_TOTP_SECRET_KEY with the actual base32-encoded TOTP secret.
+    @MainActor  // Secrets is main-actor isolated (default isolation)
     private func getRemoteDatabaseURL() -> URL? {
         guard let totp = generateTOTP(secret: Secrets.totpSecret) else {
             print("Error: Failed to generate TOTP")
@@ -265,8 +277,9 @@ class DatabaseManager {
     /// ETag and download date are stored only after a successful swap.
     /// - Returns: True if database was updated, false if already up-to-date
     @discardableResult
+    @concurrent
     func downloadRemoteDatabase() async throws -> Bool {
-        guard let url = getRemoteDatabaseURL() else {
+        guard let url = await getRemoteDatabaseURL() else {
             throw DatabaseError.invalidURL
         }
 
@@ -302,7 +315,6 @@ class DatabaseManager {
             "aviation.db.download"
         )
         let backupName = "aviation.db.bak"
-        let backupURL = directory.appendingPathComponent(backupName)
 
         defer {
             try? fileManager.removeItem(at: tempURL)
@@ -344,31 +356,7 @@ class DatabaseManager {
         try Self.validateDatabase(at: stagingURL)
 
         // Swap in the new database, keeping the previous one as a backup
-        closeDatabase()
-        try? fileManager.removeItem(at: backupURL)
-        do {
-            _ = try fileManager.replaceItemAt(
-                liveURL,
-                withItemAt: stagingURL,
-                backupItemName: backupName,
-                options: .withoutDeletingBackupItem
-            )
-        } catch {
-            openDatabase()
-            throw DatabaseError.installFailed(error.localizedDescription)
-        }
-
-        guard openDatabase(),
-            getTableRowCounts().airports >= Self.minAirportCount
-        else {
-            // Roll back to the previous database
-            closeDatabase()
-            _ = try? fileManager.replaceItemAt(liveURL, withItemAt: backupURL)
-            openDatabase()
-            throw DatabaseError.installFailed(
-                "The new database could not be opened"
-            )
-        }
+        try replaceDatabase(with: stagingURL, backupName: backupName)
 
         // Only now record the ETag and download timestamp
         if let newETag = httpResponse.value(forHTTPHeaderField: "ETag") {
@@ -502,8 +490,60 @@ class DatabaseManager {
         }
     }
 
+    /// Swaps the validated database at `stagingURL` in for the live database
+    /// in Documents, keeping the previous one as `backupName` and restoring
+    /// it if the new database can't be opened.
+    ///
+    /// The close → swap → reopen runs as a single block on `queue`, so queries
+    /// issued meanwhile wait rather than seeing a closed or half-written
+    /// database. `stagingURL` must already have passed `validateDatabase(at:)`
+    /// and must sit on the same volume as the live database for the swap to be
+    /// atomic.
+    func replaceDatabase(
+        with stagingURL: URL,
+        backupName: String = "aviation.db.bak"
+    ) throws {
+        let fileManager = FileManager.default
+        let liveURL = URL(fileURLWithPath: getDocumentsDatabasePath())
+        let backupURL = liveURL.deletingLastPathComponent()
+            .appendingPathComponent(backupName)
+
+        try queue.sync {
+            closeDatabase()
+            try? fileManager.removeItem(at: backupURL)
+            do {
+                _ = try fileManager.replaceItemAt(
+                    liveURL,
+                    withItemAt: stagingURL,
+                    backupItemName: backupName,
+                    options: .withoutDeletingBackupItem
+                )
+            } catch {
+                openDatabase()
+                throw DatabaseError.installFailed(error.localizedDescription)
+            }
+
+            guard openDatabase(),
+                fetchTableRowCounts().airports >= Self.minAirportCount
+            else {
+                // Roll back to the previous database
+                closeDatabase()
+                _ = try? fileManager.replaceItemAt(
+                    liveURL,
+                    withItemAt: backupURL
+                )
+                openDatabase()
+                throw DatabaseError.installFailed(
+                    "The new database could not be opened"
+                )
+            }
+        }
+    }
+
     @discardableResult
     private func openDatabase() -> Bool {
+        dispatchPrecondition(condition: .onQueue(queue))
+
         // Open database from Documents directory
         let dbPath = getDocumentsDatabasePath()
 
@@ -517,14 +557,43 @@ class DatabaseManager {
     }
 
     private func closeDatabase() {
+        dispatchPrecondition(condition: .onQueue(queue))
+
         if db != nil {
-            sqlite3_close(db)
+            // close_v2 never returns SQLITE_BUSY: if statements are still
+            // open it defers the close instead of leaking the connection
+            sqlite3_close_v2(db)
             db = nil
         }
     }
 
+    // MARK: - Queries
+
     // Get a specific airport by its identifier
     func getAirport(ident: String) -> Airport? {
+        queue.sync { fetchAirport(ident: ident) }
+    }
+
+    // Search airports by ICAO code or name
+    func searchAirports(query: String) -> [Airport] {
+        queue.sync { fetchAirports(query: query) }
+    }
+
+    // Get runways for a specific airport
+    func getRunways(forAirport airportIdent: String) -> [Runway] {
+        queue.sync { fetchRunways(forAirport: airportIdent) }
+    }
+
+    // Get row counts for airports and runways tables
+    func getTableRowCounts() -> (airports: Int, runways: Int) {
+        queue.sync { fetchTableRowCounts() }
+    }
+
+    // MARK: - Query implementations (must run on `queue`)
+
+    private func fetchAirport(ident: String) -> Airport? {
+        dispatchPrecondition(condition: .onQueue(queue))
+
         let queryString = """
                 SELECT ident, name, latitude_deg, longitude_deg, elevation_ft
                 FROM airports
@@ -566,8 +635,9 @@ class DatabaseManager {
         return airport
     }
 
-    // Search airports by ICAO code or name
-    func searchAirports(query: String) -> [Airport] {
+    private func fetchAirports(query: String) -> [Airport] {
+        dispatchPrecondition(condition: .onQueue(queue))
+
         var airports: [Airport] = []
 
         let queryString = """
@@ -645,8 +715,9 @@ class DatabaseManager {
         return airports
     }
 
-    // Get runways for a specific airport
-    func getRunways(forAirport airportIdent: String) -> [Runway] {
+    private func fetchRunways(forAirport airportIdent: String) -> [Runway] {
+        dispatchPrecondition(condition: .onQueue(queue))
+
         var runways: [Runway] = []
 
         let queryString = """
@@ -706,8 +777,9 @@ class DatabaseManager {
         return runways
     }
 
-    // Get row counts for airports and runways tables
-    func getTableRowCounts() -> (airports: Int, runways: Int) {
+    private func fetchTableRowCounts() -> (airports: Int, runways: Int) {
+        dispatchPrecondition(condition: .onQueue(queue))
+
         var airportCount = 0
         var runwayCount = 0
 

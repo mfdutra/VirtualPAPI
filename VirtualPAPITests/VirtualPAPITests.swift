@@ -1580,6 +1580,51 @@ struct DatabaseManagerTests {
 
         #expect(results.isEmpty)
     }
+
+    @Test("Concurrent queries while the database is replaced don't crash")
+    func testConcurrentQueriesDuringReplace() async throws {
+        let dbManager = DatabaseManager.shared
+        let documents = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dbURL = documents.appendingPathComponent("aviation.db")
+        // Swap in the same bytes so the close→swap→reopen path is exercised
+        // without changing the database other tests rely on
+        let original = try Data(contentsOf: dbURL)
+        let stagingURL = documents.appendingPathComponent(
+            "aviation.db.test-staging"
+        )
+        defer { try? FileManager.default.removeItem(at: stagingURL) }
+
+        let queryResults = try await withThrowingTaskGroup(
+            of: Bool.self
+        ) { group in
+            (0..<8).forEach { _ in
+                group.addTask {
+                    (0..<50).allSatisfy { _ in
+                        dbManager.getAirport(ident: "KSFO") != nil
+                            && !dbManager.getRunways(forAirport: "KSFO")
+                                .isEmpty
+                            && !dbManager.searchAirports(query: "KS").isEmpty
+                    }
+                }
+            }
+            group.addTask {
+                try (0..<10).forEach { _ in
+                    // replaceItemAt consumes the staging file, so re-stage
+                    // it before every swap
+                    try original.write(to: stagingURL)
+                    try dbManager.replaceDatabase(with: stagingURL)
+                }
+                return true
+            }
+            return try await group.reduce(into: []) { $0.append($1) }
+        }
+
+        // Queries never observe a closed/missing handle: they wait for the
+        // replace to finish, so every one returns data
+        #expect(queryResults.allSatisfy { $0 })
+        #expect(dbManager.getTableRowCounts().airports > 0)
+    }
 }
 
 // MARK: - Database Validation Tests
