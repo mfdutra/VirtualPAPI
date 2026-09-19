@@ -70,9 +70,12 @@ struct GDL90DebugView: View {
                 HStack {
                     Text("Pressure Altitude")
                     Spacer()
-                    Text("\(gdl90Reader.altitude, specifier: "%.0f") ft")
-                        .foregroundColor(.secondary)
-                        .monospaced()
+                    Text(
+                        gdl90Reader.altitude.map { String(format: "%.0f ft", $0) }
+                            ?? "Invalid"
+                    )
+                    .foregroundColor(.secondary)
+                    .monospaced()
                 }
                 HStack {
                     Text("Speed")
@@ -104,14 +107,19 @@ struct GDL90DebugView: View {
                 HStack {
                     Text("Altitude Difference")
                     Spacer()
-                    let diff =
-                        gdl90Reader.geometricAltitude - gdl90Reader.altitude
-                    Text("\(diff > 0 ? "+" : "")\(diff, specifier: "%.0f") ft")
-                        .foregroundColor(
-                            diff > 0
-                                ? .green : (diff < 0 ? .orange : .secondary)
-                        )
-                        .monospaced()
+                    if let altitude = gdl90Reader.altitude {
+                        let diff = gdl90Reader.geometricAltitude - altitude
+                        Text("\(diff > 0 ? "+" : "")\(diff, specifier: "%.0f") ft")
+                            .foregroundColor(
+                                diff > 0
+                                    ? .green : (diff < 0 ? .orange : .secondary)
+                            )
+                            .monospaced()
+                    } else {
+                        Text("---")
+                            .foregroundColor(.secondary)
+                            .monospaced()
+                    }
                 }
             }
 

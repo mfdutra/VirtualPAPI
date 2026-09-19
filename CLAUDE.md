@@ -231,7 +231,7 @@ The GDL90 protocol is a standard aviation data link protocol used by many portab
 **Message Parsing:**
 - Message ID 10 (Ownship Report): Position, pressure altitude, ground speed, track
   - 24-bit signed lat/lon with LSB = 180/2^23 degrees
-  - 12-bit altitude with 25 ft resolution, -1000 ft offset
+  - 12-bit altitude with 25 ft resolution, -1000 ft offset (0xFFF = invalid, decoded to nil by `static func GDL90Reader.decodePressureAltitude(_:)`; `GDL90Reader.altitude` is `Double?` and the debug view shows "Invalid")
   - 12-bit velocity with 1 knot resolution (0xFFF = invalid)
   - 8-bit track with LSB = 360/256 = 1.40625 degrees
 - Message ID 11 (Ownship Geometric Altitude): 16-bit signed with 5 ft resolution
@@ -239,6 +239,7 @@ The GDL90 protocol is a standard aviation data link protocol used by many portab
 **Altitude datum selection:**
 - The glidepath compares aircraft altitude against MSL runway elevations, but Msg 10 altitude is pressure altitude (29.92 inHg), which can be off by hundreds of feet on non-standard days
 - `processGDL90Data` records `geometricAltitudeTime` whenever a Msg 11 arrives; on each Msg 10 the pure `static func GDL90Reader.selectAltitude(pressureAltitude:geometricAltitude:geometricAltitudeTime:now:)` picks geometric altitude if it's at most `geometricAltitudeMaxAge` (3 s, tolerating a couple of dropped 1 Hz messages) old, else pressure altitude
+- `pressureAltitude` is optional (nil when Msg 10 reports 0xFFF); if it's nil and there's no fresh geometric altitude, `selectAltitude` returns nil and that Msg 10 does not update `GenericLocation` (nor `usingGeometricAltitude`), so the location goes stale instead of feeding a bogus altitude into the glidepath
 - The result is published as `GDL90Reader.usingGeometricAltitude`, which drives the ContentView indicator; unit-tested in the "GDL90 Altitude Selection Tests" suite
 
 **Device Discovery:**

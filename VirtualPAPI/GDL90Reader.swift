@@ -14,7 +14,8 @@ import Network
 class GDL90Reader: ObservableObject {
     @Published var latitude: Double = 0.0
     @Published var longitude: Double = 0.0
-    @Published var altitude: Double = 0.0  // Pressure altitude from message 10
+    // Pressure altitude from message 10, nil when the report flags it invalid
+    @Published var altitude: Double? = nil
     @Published var geometricAltitude: Double = 0.0  // Geometric altitude from message 11
     @Published var geometricAltitudeTime: Date?  // When the last message 11 arrived
     // True when the altitude fed to GenericLocation is geometric (message 11),
@@ -358,7 +359,7 @@ class GDL90Reader: ObservableObject {
         // Which is: (msgBytes[11] << 4) | ((msgBytes[12] & 0xf0) >> 4)
         let altMetric =
             (UInt16(message[11]) << 4) | ((UInt16(message[12]) & 0xF0) >> 4)
-        let altitude = Double(altMetric) * 25.0 - 1000.0
+        let altitude = GDL90Reader.decodePressureAltitude(altMetric)
 
         // Bytes 14-15: Horizontal velocity (12-bit value, resolution 1 knot)
         // Byte 14 = upper 8 bits, upper nibble of byte 15 = lower 4 bits
@@ -377,12 +378,16 @@ class GDL90Reader: ObservableObject {
         self.track = track
         self.lastUpdateTime = Date()
 
-        let selected = GDL90Reader.selectAltitude(
-            pressureAltitude: altitude,
-            geometricAltitude: geometricAltitude,
-            geometricAltitudeTime: geometricAltitudeTime,
-            now: lastUpdateTime
-        )
+        // With no usable altitude, don't feed a position to GenericLocation;
+        // it goes stale rather than computing a glidepath from garbage
+        guard
+            let selected = GDL90Reader.selectAltitude(
+                pressureAltitude: altitude,
+                geometricAltitude: geometricAltitude,
+                geometricAltitudeTime: geometricAltitudeTime,
+                now: lastUpdateTime
+            )
+        else { return }
         self.usingGeometricAltitude = selected.isGeometric
 
         updateGenericLocation(
@@ -398,18 +403,26 @@ class GDL90Reader: ObservableObject {
     // geometric altitude (message 11) when it's fresh. Otherwise fall back to
     // pressure altitude (message 10), which is referenced to 29.92 inHg and
     // can be off by hundreds of feet on non-standard days.
+    // Returns nil when neither altitude is usable (pressure altitude invalid
+    // and no fresh geometric altitude).
     static func selectAltitude(
-        pressureAltitude: Double,
+        pressureAltitude: Double?,
         geometricAltitude: Double,
         geometricAltitudeTime: Date?,
         now: Date
-    ) -> (altitude: Double, isGeometric: Bool) {
+    ) -> (altitude: Double, isGeometric: Bool)? {
         guard let time = geometricAltitudeTime,
             now.timeIntervalSince(time) <= geometricAltitudeMaxAge
         else {
-            return (pressureAltitude, false)
+            return pressureAltitude.map { ($0, false) }
         }
         return (geometricAltitude, true)
+    }
+
+    // Message 10 altitude: 12-bit value, 25 ft resolution, -1000 ft offset.
+    // 0xFFF means invalid/unavailable (e.g. no pressure source).
+    static func decodePressureAltitude(_ raw: UInt16) -> Double? {
+        raw == 0xFFF ? nil : Double(raw) * 25.0 - 1000.0
     }
 
     // Parse Message ID 11: Ownship Geometric Altitude

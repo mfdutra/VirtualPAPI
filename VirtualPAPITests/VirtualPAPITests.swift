@@ -1228,8 +1228,8 @@ struct GDL90AltitudeSelectionTests {
             geometricAltitudeTime: now.addingTimeInterval(-1),
             now: now
         )
-        #expect(selected.altitude == 2300)
-        #expect(selected.isGeometric)
+        #expect(selected?.altitude == 2300)
+        #expect(selected?.isGeometric == true)
     }
 
     @Test("Uses geometric altitude right at the freshness limit")
@@ -1243,7 +1243,7 @@ struct GDL90AltitudeSelectionTests {
             ),
             now: now
         )
-        #expect(selected.isGeometric)
+        #expect(selected?.isGeometric == true)
     }
 
     @Test("Falls back to pressure altitude when message 11 is stale")
@@ -1257,8 +1257,8 @@ struct GDL90AltitudeSelectionTests {
             ),
             now: now
         )
-        #expect(selected.altitude == 2000)
-        #expect(!selected.isGeometric)
+        #expect(selected?.altitude == 2000)
+        #expect(selected?.isGeometric == false)
     }
 
     @Test("Falls back to pressure altitude when message 11 never arrived")
@@ -1270,8 +1270,61 @@ struct GDL90AltitudeSelectionTests {
             geometricAltitudeTime: nil,
             now: now
         )
-        #expect(selected.altitude == 2000)
-        #expect(!selected.isGeometric)
+        #expect(selected?.altitude == 2000)
+        #expect(selected?.isGeometric == false)
+    }
+
+    @Test("Uses fresh geometric altitude when pressure altitude is invalid")
+    @MainActor
+    func testInvalidPressureWithFreshGeometric() {
+        let selected = GDL90Reader.selectAltitude(
+            pressureAltitude: nil,
+            geometricAltitude: 2300,
+            geometricAltitudeTime: now.addingTimeInterval(-1),
+            now: now
+        )
+        #expect(selected?.altitude == 2300)
+        #expect(selected?.isGeometric == true)
+    }
+
+    @Test("No altitude when pressure is invalid and message 11 is stale")
+    @MainActor
+    func testInvalidPressureWithStaleGeometric() {
+        let selected = GDL90Reader.selectAltitude(
+            pressureAltitude: nil,
+            geometricAltitude: 2300,
+            geometricAltitudeTime: now.addingTimeInterval(
+                -GDL90Reader.geometricAltitudeMaxAge - 0.1
+            ),
+            now: now
+        )
+        #expect(selected == nil)
+    }
+
+    @Test("No altitude when pressure is invalid and message 11 never arrived")
+    @MainActor
+    func testInvalidPressureWithNoGeometric() {
+        let selected = GDL90Reader.selectAltitude(
+            pressureAltitude: nil,
+            geometricAltitude: 0,
+            geometricAltitudeTime: nil,
+            now: now
+        )
+        #expect(selected == nil)
+    }
+
+    @Test("Decodes pressure altitude with 25 ft resolution and -1000 ft offset")
+    @MainActor
+    func testDecodePressureAltitude() {
+        #expect(GDL90Reader.decodePressureAltitude(0x000) == -1000)
+        #expect(GDL90Reader.decodePressureAltitude(0x028) == 0)
+        #expect(GDL90Reader.decodePressureAltitude(0xFFE) == 101_350)
+    }
+
+    @Test("Pressure altitude 0xFFF is invalid")
+    @MainActor
+    func testDecodeInvalidPressureAltitude() {
+        #expect(GDL90Reader.decodePressureAltitude(0xFFF) == nil)
     }
 }
 
