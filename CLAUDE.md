@@ -30,7 +30,12 @@ xcodebuild test -scheme VirtualPAPI -only-testing:VirtualPAPITests -destination 
 
 # Run UI tests
 xcodebuild test -scheme VirtualPAPI -only-testing:VirtualPAPIUITests -destination 'platform=iOS Simulator,name=iPhone 17'
+
+# Run unit tests natively on an Apple silicon Mac (no simulator), as a "Designed for iPad" app
+xcodebuild test -scheme VirtualPAPI -only-testing:VirtualPAPITests -destination 'platform=macOS,arch=arm64,variant=Designed for iPad'
 ```
+
+When running on the Mac, the `Executed 0 tests` line only counts XCTest tests; Swift Testing reports its results on the `Test run with N tests ... passed` line. The `[AXLoading] ... ScreenTimeUI` errors are harmless macOS noise.
 
 ### Database Generation
 The `scripts/` directory contains aviation data from ourairports.com:
