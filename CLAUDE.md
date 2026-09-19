@@ -49,6 +49,11 @@ This creates `aviation.db` with airports and runways tables. The script processe
 - `airports.csv`: Airport locations and elevations
 - `runways.csv`: Runway coordinates, headings, and displaced thresholds
 
+Filtering rules applied by the script:
+- Runways that are closed or have missing end coordinates or identifiers are skipped
+- Each runway end is stored as its own row; ends with no elevation data are skipped, so every runway in the database has an elevation
+- Airports left with no runways after this filtering are removed
+
 **Database Management:**
 - `DatabaseManager` (singleton) handles SQLite operations
 - Database copied from bundle to Documents directory on first launch

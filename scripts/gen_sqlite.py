@@ -132,7 +132,8 @@ def create_database(db_path='aviation.db'):
                     ) if row['he_displaced_threshold_ft'] else 0
             )
 
-            for side in (side1, side2):
+            # Skip runway ends without elevation data (index 6 is elevation_ft)
+            for side in filter(lambda s: s[6] is not None, (side1, side2)):
                 try:
                     cursor.execute('''
                         INSERT INTO runways VALUES (?,?,?,?,?,?,?,?,?)
