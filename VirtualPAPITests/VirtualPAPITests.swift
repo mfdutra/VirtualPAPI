@@ -10,6 +10,14 @@ import Testing
 
 @testable import VirtualPAPI
 
+extension UserDefaults {
+    /// A fresh, empty store so tests never read or write the app's shared
+    /// UserDefaults.standard, which other suites running in parallel also use.
+    static func isolatedForTesting() -> UserDefaults {
+        UserDefaults(suiteName: "VirtualPAPITests.\(UUID().uuidString)")!
+    }
+}
+
 // MARK: - GenericLocation Tests
 
 @Suite("GenericLocation Tests", .serialized)
@@ -193,7 +201,7 @@ struct XGPSDataReaderTests {
     func testParseValidXGPSPacket() {
         let reader = XGPSDataReader()
         let genericLocation = GenericLocation()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
 
         reader.genericLocation = genericLocation
@@ -219,7 +227,7 @@ struct XGPSDataReaderTests {
     @Test("Parse XGPS packet with zero altitude")
     func testParseXGPSPacketZeroAltitude() {
         let reader = XGPSDataReader()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
@@ -234,7 +242,7 @@ struct XGPSDataReaderTests {
     @Test("Parse XGPS packet with negative coordinates")
     func testParseXGPSPacketNegativeCoordinates() {
         let reader = XGPSDataReader()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
@@ -251,7 +259,7 @@ struct XGPSDataReaderTests {
     @Test("Reject packet with invalid header")
     func testRejectInvalidHeader() {
         let reader = XGPSDataReader()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
@@ -271,7 +279,7 @@ struct XGPSDataReaderTests {
     @Test("Reject packet that is too short")
     func testRejectShortPacket() {
         let reader = XGPSDataReader()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
@@ -292,7 +300,7 @@ struct XGPSDataReaderTests {
     func testDoNotUpdateWhenXPlaneDisabled() {
         let reader = XGPSDataReader()
         let genericLocation = GenericLocation()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .internalGPS  // Not X-Plane
 
         reader.genericLocation = genericLocation
@@ -318,7 +326,7 @@ struct XGPSDataReaderTests {
     @Test("Update timestamp on packet reception")
     func testUpdateTimestamp() async {
         let reader = XGPSDataReader()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
@@ -339,7 +347,7 @@ struct XGPSDataReaderTests {
     func testParseXGPSPacketWithSpeedAndTrack() {
         let reader = XGPSDataReader()
         let genericLocation = GenericLocation()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
 
         reader.genericLocation = genericLocation
@@ -369,7 +377,7 @@ struct XGPSDataReaderTests {
     @Test("Parse XGPS packet with zero speed")
     func testParseXGPSPacketWithZeroSpeed() {
         let reader = XGPSDataReader()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
@@ -386,7 +394,7 @@ struct XGPSDataReaderTests {
     @Test("Parse XGPS packet with various headings")
     func testParseXGPSPacketWithVariousHeadings() {
         let reader = XGPSDataReader()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
@@ -418,7 +426,7 @@ struct XGPSDataReaderTests {
     @Test("Parse XGPS packet with high speed")
     func testParseXGPSPacketWithHighSpeed() {
         let reader = XGPSDataReader()
-        let appSettings = AppSettings()
+        let appSettings = AppSettings(defaults: .isolatedForTesting())
         appSettings.locationSource = .xPlane
         reader.appSettings = appSettings
 
@@ -887,7 +895,7 @@ struct GenericLocationExtendedTests {
     @MainActor
     func testSmoothedGlideSlopeOffset() async {
         let location = GenericLocation()
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: .isolatedForTesting())
         let selection = AirportSelection()
 
         settings.emaAlpha = 0.5  // 50% smoothing
@@ -1164,144 +1172,107 @@ struct VerticalSpeedTests {
 
 // MARK: - AppSettings Tests
 
-@Suite("AppSettings Tests", .serialized)
-struct AppSettingsTests {
+@Suite("AppSettings Tests")
+final class AppSettingsTests {
+    // Each test gets its own empty store, so these tests can't race with each
+    // other or with other suites (which run in parallel) on UserDefaults.standard
+    private let suiteName = "VirtualPAPITests.AppSettings.\(UUID().uuidString)"
+    private let defaults: UserDefaults
+
+    init() {
+        defaults = UserDefaults(suiteName: suiteName)!
+    }
+
+    deinit {
+        defaults.removePersistentDomain(forName: suiteName)
+    }
 
     @Test("Default values when no UserDefaults exist")
     func testDefaultValues() {
-        // Clear UserDefaults and synchronize to ensure changes are persisted
-        UserDefaults.standard.removeObject(forKey: "useXPlane")
-        UserDefaults.standard.removeObject(forKey: "showDebugInfo")
-        UserDefaults.standard.removeObject(forKey: "locationSource")
-        UserDefaults.standard.removeObject(forKey: "emaAlpha")
-        UserDefaults.standard.synchronize()
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
 
         #expect(settings.useXPlane == false)
         #expect(settings.showDebugInfo == false)
         #expect(settings.locationSource == .internalGPS)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "useXPlane")
-        UserDefaults.standard.removeObject(forKey: "showDebugInfo")
-        UserDefaults.standard.removeObject(forKey: "locationSource")
-        UserDefaults.standard.removeObject(forKey: "emaAlpha")
     }
 
     @Test("useXPlane persists to UserDefaults")
     func testUseXPlanePersistence() {
-        UserDefaults.standard.removeObject(forKey: "useXPlane")
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
         settings.useXPlane = true
 
         // Create a new instance to verify persistence
-        let newSettings = AppSettings()
+        let newSettings = AppSettings(defaults: defaults)
         #expect(newSettings.useXPlane == true)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "useXPlane")
     }
 
     @Test("showDebugInfo persists to UserDefaults")
     func testShowDebugInfoPersistence() {
-        UserDefaults.standard.removeObject(forKey: "showDebugInfo")
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
         settings.showDebugInfo = true
 
         // Create a new instance to verify persistence
-        let newSettings = AppSettings()
+        let newSettings = AppSettings(defaults: defaults)
         #expect(newSettings.showDebugInfo == true)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "showDebugInfo")
     }
 
     @Test("Load existing UserDefaults values")
     func testLoadExistingValues() {
-        UserDefaults.standard.set(true, forKey: "useXPlane")
-        UserDefaults.standard.set(false, forKey: "showDebugInfo")
+        defaults.set(true, forKey: "useXPlane")
+        defaults.set(false, forKey: "showDebugInfo")
 
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
 
         #expect(settings.useXPlane == true)
         #expect(settings.showDebugInfo == false)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "useXPlane")
-        UserDefaults.standard.removeObject(forKey: "showDebugInfo")
     }
 
     @Test("Toggle values updates UserDefaults")
     func testToggleValues() {
-        UserDefaults.standard.removeObject(forKey: "useXPlane")
-        UserDefaults.standard.removeObject(forKey: "showDebugInfo")
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
 
         settings.useXPlane = true
-        #expect(UserDefaults.standard.bool(forKey: "useXPlane") == true)
+        #expect(defaults.bool(forKey: "useXPlane") == true)
 
         settings.useXPlane = false
-        #expect(UserDefaults.standard.bool(forKey: "useXPlane") == false)
+        #expect(defaults.bool(forKey: "useXPlane") == false)
 
         settings.showDebugInfo = true
-        #expect(UserDefaults.standard.bool(forKey: "showDebugInfo") == true)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "useXPlane")
-        UserDefaults.standard.removeObject(forKey: "showDebugInfo")
+        #expect(defaults.bool(forKey: "showDebugInfo") == true)
     }
 
     @Test("Visualization default value is glideSlope")
     func testVisualizationDefaultValue() {
-        UserDefaults.standard.removeObject(forKey: "visualization")
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
 
         #expect(settings.visualization == .glideSlope)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "visualization")
     }
 
     @Test("Visualization persists to UserDefaults")
     func testVisualizationPersistence() {
-        UserDefaults.standard.removeObject(forKey: "visualization")
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
         settings.visualization = .papi
 
         // Create a new instance to verify persistence
-        let newSettings = AppSettings()
+        let newSettings = AppSettings(defaults: defaults)
         #expect(newSettings.visualization == .papi)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "visualization")
     }
 
     @Test("Visualization can be toggled between modes")
     func testVisualizationToggle() {
-        UserDefaults.standard.removeObject(forKey: "visualization")
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
         #expect(settings.visualization == .glideSlope)
 
         settings.visualization = .papi
         #expect(settings.visualization == .papi)
-        #expect(UserDefaults.standard.string(forKey: "visualization") == "PAPI")
+        #expect(defaults.string(forKey: "visualization") == "PAPI")
 
         settings.visualization = .glideSlope
         #expect(settings.visualization == .glideSlope)
         #expect(
-            UserDefaults.standard.string(forKey: "visualization")
+            defaults.string(forKey: "visualization")
                 == "Glide Slope"
         )
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "visualization")
     }
 
     @Test("VisualizationType enum has correct raw values")
@@ -1320,71 +1291,53 @@ struct AppSettingsTests {
 
     @Test("Default EMA alpha value")
     func testDefaultEmaAlpha() {
-        UserDefaults.standard.removeObject(forKey: "emaAlpha")
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
 
         #expect(settings.emaAlpha == 0.2)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "emaAlpha")
     }
 
     @Test("EMA alpha persists to UserDefaults")
     func testEmaAlphaPersistence() {
-        UserDefaults.standard.removeObject(forKey: "emaAlpha")
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
         settings.emaAlpha = 0.5
 
         // Create a new instance to verify persistence
-        let newSettings = AppSettings()
+        let newSettings = AppSettings(defaults: defaults)
         #expect(newSettings.emaAlpha == 0.5)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "emaAlpha")
     }
 
     @Test("EMA alpha can be set to various values")
     func testEmaAlphaVariousValues() {
-        UserDefaults.standard.removeObject(forKey: "emaAlpha")
-
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
 
         // Test smooth (0.2)
         settings.emaAlpha = 0.2
         #expect(settings.emaAlpha == 0.2)
-        #expect(UserDefaults.standard.double(forKey: "emaAlpha") == 0.2)
+        #expect(defaults.double(forKey: "emaAlpha") == 0.2)
 
         // Test medium (0.5)
         settings.emaAlpha = 0.5
         #expect(settings.emaAlpha == 0.5)
-        #expect(UserDefaults.standard.double(forKey: "emaAlpha") == 0.5)
+        #expect(defaults.double(forKey: "emaAlpha") == 0.5)
 
         // Test fast (0.8)
         settings.emaAlpha = 0.8
         #expect(settings.emaAlpha == 0.8)
-        #expect(UserDefaults.standard.double(forKey: "emaAlpha") == 0.8)
+        #expect(defaults.double(forKey: "emaAlpha") == 0.8)
 
         // Test instantaneous (1.0)
         settings.emaAlpha = 1.0
         #expect(settings.emaAlpha == 1.0)
-        #expect(UserDefaults.standard.double(forKey: "emaAlpha") == 1.0)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "emaAlpha")
+        #expect(defaults.double(forKey: "emaAlpha") == 1.0)
     }
 
     @Test("Load existing EMA alpha from UserDefaults")
     func testLoadExistingEmaAlpha() {
-        UserDefaults.standard.set(0.75, forKey: "emaAlpha")
+        defaults.set(0.75, forKey: "emaAlpha")
 
-        let settings = AppSettings()
+        let settings = AppSettings(defaults: defaults)
 
         #expect(settings.emaAlpha == 0.75)
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "emaAlpha")
     }
 }
 

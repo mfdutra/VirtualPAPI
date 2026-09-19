@@ -40,9 +40,13 @@ enum HeaderSize: String, CaseIterable, Identifiable {
 }
 
 class AppSettings: ObservableObject {
+    // Injectable so tests can use an isolated store instead of the shared
+    // UserDefaults.standard, which parallel test suites would otherwise race on
+    private let defaults: UserDefaults
+
     @Published var locationSource: LocationSource {
         didSet {
-            UserDefaults.standard.set(
+            defaults.set(
                 locationSource.rawValue,
                 forKey: "locationSource"
             )
@@ -51,19 +55,19 @@ class AppSettings: ObservableObject {
 
     @Published var useXPlane: Bool {
         didSet {
-            UserDefaults.standard.set(useXPlane, forKey: "useXPlane")
+            defaults.set(useXPlane, forKey: "useXPlane")
         }
     }
 
     @Published var showDebugInfo: Bool {
         didSet {
-            UserDefaults.standard.set(showDebugInfo, forKey: "showDebugInfo")
+            defaults.set(showDebugInfo, forKey: "showDebugInfo")
         }
     }
 
     @Published var favoriteAirports: [String] {
         didSet {
-            UserDefaults.standard.set(
+            defaults.set(
                 favoriteAirports,
                 forKey: "favoriteAirports"
             )
@@ -72,7 +76,7 @@ class AppSettings: ObservableObject {
 
     @Published var visualization: VisualizationType {
         didSet {
-            UserDefaults.standard.set(
+            defaults.set(
                 visualization.rawValue,
                 forKey: "visualization"
             )
@@ -81,25 +85,27 @@ class AppSettings: ObservableObject {
 
     @Published var emaAlpha: Double {
         didSet {
-            UserDefaults.standard.set(emaAlpha, forKey: "emaAlpha")
+            defaults.set(emaAlpha, forKey: "emaAlpha")
         }
     }
 
     @Published var headerSize: HeaderSize {
         didSet {
-            UserDefaults.standard.set(headerSize.rawValue, forKey: "headerSize")
+            defaults.set(headerSize.rawValue, forKey: "headerSize")
         }
     }
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+
         // Migrate from old useXPlane boolean if needed
-        if let savedSource = UserDefaults.standard.string(
+        if let savedSource = defaults.string(
             forKey: "locationSource"
         ),
             let source = LocationSource(rawValue: savedSource)
         {
             self.locationSource = source
-        } else if UserDefaults.standard.object(forKey: "useXPlane") as? Bool
+        } else if defaults.object(forKey: "useXPlane") as? Bool
             == true
         {
             // Migrate old setting
@@ -109,14 +115,14 @@ class AppSettings: ObservableObject {
         }
 
         self.useXPlane =
-            UserDefaults.standard.object(forKey: "useXPlane") as? Bool ?? false
+            defaults.object(forKey: "useXPlane") as? Bool ?? false
         self.showDebugInfo =
-            UserDefaults.standard.object(forKey: "showDebugInfo") as? Bool
+            defaults.object(forKey: "showDebugInfo") as? Bool
             ?? false
         self.favoriteAirports =
-            UserDefaults.standard.stringArray(forKey: "favoriteAirports") ?? []
+            defaults.stringArray(forKey: "favoriteAirports") ?? []
 
-        if let savedVisualization = UserDefaults.standard.string(
+        if let savedVisualization = defaults.string(
             forKey: "visualization"
         ),
             let visualizationType = VisualizationType(
@@ -129,10 +135,10 @@ class AppSettings: ObservableObject {
         }
 
         self.emaAlpha =
-            UserDefaults.standard.object(forKey: "emaAlpha") as? Double ?? 0.2
+            defaults.object(forKey: "emaAlpha") as? Double ?? 0.2
 
         self.headerSize =
-            UserDefaults.standard.string(forKey: "headerSize")
+            defaults.string(forKey: "headerSize")
             .flatMap(HeaderSize.init(rawValue:)) ?? .normal
     }
 

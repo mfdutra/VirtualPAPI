@@ -174,6 +174,7 @@ These match the SQLite schema in `scripts/aviation.db`.
 
 **Settings and State:**
 - `AppSettings`: Observable settings object with UserDefaults persistence
+  - `init(defaults:)` takes the `UserDefaults` store to use (defaults to `.standard`); tests pass an isolated store (see "Unit Tests" below)
   - `locationSource`: Active GPS/simulator source
   - `visualization`: Display mode (glide slope or PAPI)
   - `emaAlpha`: Smoothing factor (0.2 = smooth, 1.0 = instantaneous)
@@ -276,6 +277,9 @@ Most views include `#Preview` macros for Xcode canvas previews. When modifying v
 ```
 
 Note: Not all views require all environment objects. Check the view's `@EnvironmentObject` declarations to determine which are needed.
+
+### Unit Tests
+Tests use Swift Testing. `.serialized` only orders tests *within* a suite; separate suites still run in parallel, so any state shared across suites is a race. In particular, never construct `AppSettings()` in tests: it reads and writes `UserDefaults.standard`, and a setter in one suite (e.g. `locationSource = .xPlane`) can leak into another suite's "default values" assertions. Use `AppSettings(defaults: .isolatedForTesting())` (a fresh, UUID-named suite), or, in `AppSettingsTests`, the per-test `defaults` store that the suite's `init`/`deinit` create and remove.
 
 ### Concurrency
 - `XGPSDataReader` and `GDL90Reader` use `@MainActor` to ensure all UI updates happen on main thread
