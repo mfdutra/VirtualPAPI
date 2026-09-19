@@ -6,7 +6,6 @@
 //
 
 import CoreLocation
-import SwiftData
 import SwiftUI
 import UIKit
 

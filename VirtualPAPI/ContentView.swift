@@ -5,12 +5,9 @@
 //  Created by Marlon Dutra on 11/15/25.
 //
 
-import SwiftData
 import SwiftUI
-internal import _LocationEssentials
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
     @State var gs_deviation: Double = 0
     @EnvironmentObject var genericLocation: GenericLocation
     @EnvironmentObject var appSettings: AppSettings
