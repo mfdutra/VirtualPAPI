@@ -53,24 +53,9 @@ class AppSettings: ObservableObject {
         }
     }
 
-    @Published var useXPlane: Bool {
-        didSet {
-            defaults.set(useXPlane, forKey: "useXPlane")
-        }
-    }
-
     @Published var showDebugInfo: Bool {
         didSet {
             defaults.set(showDebugInfo, forKey: "showDebugInfo")
-        }
-    }
-
-    @Published var favoriteAirports: [String] {
-        didSet {
-            defaults.set(
-                favoriteAirports,
-                forKey: "favoriteAirports"
-            )
         }
     }
 
@@ -114,13 +99,9 @@ class AppSettings: ObservableObject {
             self.locationSource = .internalGPS
         }
 
-        self.useXPlane =
-            defaults.object(forKey: "useXPlane") as? Bool ?? false
         self.showDebugInfo =
             defaults.object(forKey: "showDebugInfo") as? Bool
             ?? false
-        self.favoriteAirports =
-            defaults.stringArray(forKey: "favoriteAirports") ?? []
 
         if let savedVisualization = defaults.string(
             forKey: "visualization"
@@ -140,31 +121,5 @@ class AppSettings: ObservableObject {
         self.headerSize =
             defaults.string(forKey: "headerSize")
             .flatMap(HeaderSize.init(rawValue:)) ?? .normal
-    }
-
-    // MARK: - Favorite Airports Management
-
-    func addFavoriteAirport(_ airportCode: String) {
-        let code = airportCode.uppercased().trimmingCharacters(in: .whitespaces)
-        if !code.isEmpty && !favoriteAirports.contains(code) {
-            favoriteAirports.append(code)
-        }
-    }
-
-    func removeFavoriteAirport(_ airportCode: String) {
-        favoriteAirports.removeAll { $0 == airportCode }
-    }
-
-    func isFavorite(_ airportCode: String) -> Bool {
-        favoriteAirports.contains(airportCode.uppercased())
-    }
-
-    func toggleFavorite(_ airportCode: String) {
-        let code = airportCode.uppercased().trimmingCharacters(in: .whitespaces)
-        if isFavorite(code) {
-            removeFavoriteAirport(code)
-        } else {
-            addFavoriteAirport(code)
-        }
     }
 }

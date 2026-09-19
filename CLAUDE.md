@@ -77,7 +77,7 @@ Filtering rules applied by the script:
 The app uses SwiftUI's `@StateObject` and `@EnvironmentObject` pattern for global state:
 
 1. **VirtualPAPIApp.swift** (app entry point) creates six core state objects:
-   - `AppSettings`: User preferences (location source, visualization type, debug info, favorites, smoothing)
+   - `AppSettings`: User preferences (location source, visualization type, debug info, smoothing)
    - `GenericLocation`: Abstract location provider consumed by UI, handles calculations
    - `XGPSDataReader`: UDP listener for X-Plane GPS data (port 49002)
    - `GDL90Reader`: UDP listener for GDL90-compatible GPS devices (port 4000)
@@ -206,14 +206,14 @@ These match the SQLite schema in `scripts/aviation.db`.
   - `emaAlpha`: Smoothing factor (0.2 = smooth, 1.0 = instantaneous)
   - `headerSize`: Font size of the DTG and V/B line in ContentView (`HeaderSize` enum: normal = `.body`, large = `.title2`, x-large = `.title`)
   - `showDebugInfo`: Toggle for debug overlay
-  - `favoriteAirports`: Array of airport identifiers
-  - Includes migration logic from old `useXPlane` boolean setting
+  - `init` migrates the legacy `useXPlane` boolean: when no `locationSource` is stored but `useXPlane` is `true`, the source becomes `.xPlane`. The old key is only read, never written, and there is no `useXPlane` property
+  - Does not own favorites: `AirportSelection` is the sole owner of the `"favoriteAirports"` UserDefaults key
 
 - `AirportSelection`: Observable selection state
   - Selected airport and runway references
   - Descent angle and aiming point configuration
   - Target coordinates (calculated from runway + displaced threshold + aiming point)
-  - Favorite airports management with UserDefaults persistence
+  - Favorite airports management (`favoriteAirports: Set<String>`, `isFavorite`, `toggleFavorite`) with UserDefaults persistence under the `"favoriteAirports"` key — the single store for favorites
 
 ## Key Implementation Details
 

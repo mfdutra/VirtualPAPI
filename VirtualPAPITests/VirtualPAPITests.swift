@@ -1491,19 +1491,18 @@ final class AppSettingsTests {
     func testDefaultValues() {
         let settings = AppSettings(defaults: defaults)
 
-        #expect(settings.useXPlane == false)
         #expect(settings.showDebugInfo == false)
         #expect(settings.locationSource == .internalGPS)
     }
 
-    @Test("useXPlane persists to UserDefaults")
-    func testUseXPlanePersistence() {
+    @Test("locationSource persists to UserDefaults")
+    func testLocationSourcePersistence() {
         let settings = AppSettings(defaults: defaults)
-        settings.useXPlane = true
+        settings.locationSource = .gdl90
 
         // Create a new instance to verify persistence
         let newSettings = AppSettings(defaults: defaults)
-        #expect(newSettings.useXPlane == true)
+        #expect(newSettings.locationSource == .gdl90)
     }
 
     @Test("showDebugInfo persists to UserDefaults")
@@ -1518,24 +1517,52 @@ final class AppSettingsTests {
 
     @Test("Load existing UserDefaults values")
     func testLoadExistingValues() {
-        defaults.set(true, forKey: "useXPlane")
-        defaults.set(false, forKey: "showDebugInfo")
+        defaults.set(LocationSource.gdl90.rawValue, forKey: "locationSource")
+        defaults.set(true, forKey: "showDebugInfo")
 
         let settings = AppSettings(defaults: defaults)
 
-        #expect(settings.useXPlane == true)
-        #expect(settings.showDebugInfo == false)
+        #expect(settings.locationSource == .gdl90)
+        #expect(settings.showDebugInfo == true)
+    }
+
+    @Test("Legacy useXPlane migrates to the X-Plane location source")
+    func testUseXPlaneMigration() {
+        defaults.set(true, forKey: "useXPlane")
+
+        let settings = AppSettings(defaults: defaults)
+
+        #expect(settings.locationSource == .xPlane)
+    }
+
+    @Test("Legacy useXPlane false migrates to internal GPS")
+    func testUseXPlaneFalseMigration() {
+        defaults.set(false, forKey: "useXPlane")
+
+        let settings = AppSettings(defaults: defaults)
+
+        #expect(settings.locationSource == .internalGPS)
+    }
+
+    @Test("Saved locationSource wins over legacy useXPlane")
+    func testLocationSourceTakesPrecedenceOverUseXPlane() {
+        defaults.set(true, forKey: "useXPlane")
+        defaults.set(LocationSource.gdl90.rawValue, forKey: "locationSource")
+
+        let settings = AppSettings(defaults: defaults)
+
+        #expect(settings.locationSource == .gdl90)
     }
 
     @Test("Toggle values updates UserDefaults")
     func testToggleValues() {
         let settings = AppSettings(defaults: defaults)
 
-        settings.useXPlane = true
-        #expect(defaults.bool(forKey: "useXPlane") == true)
-
-        settings.useXPlane = false
-        #expect(defaults.bool(forKey: "useXPlane") == false)
+        settings.locationSource = .xPlane
+        #expect(
+            defaults.string(forKey: "locationSource")
+                == LocationSource.xPlane.rawValue
+        )
 
         settings.showDebugInfo = true
         #expect(defaults.bool(forKey: "showDebugInfo") == true)
