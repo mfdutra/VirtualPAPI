@@ -40,17 +40,24 @@ When running on the Mac, the `Executed 0 tests` line only counts XCTest tests; S
 ### Database Generation
 The `scripts/` directory contains aviation data from ourairports.com:
 ```bash
-# Regenerate the SQLite database from CSV files
+# Regenerate the SQLite database from CSV files (default output: ./aviation.db)
 cd scripts
-./gen_sqlite.py
+./gen_sqlite.py path/to/airports.csv path/to/runways.csv
+
+# Write somewhere else, e.g. straight over the bundled copy
+./gen_sqlite.py path/to/airports.csv path/to/runways.csv -o ../VirtualPAPI/aviation.db
 ```
 
-This creates `aviation.db` with airports and runways tables. The script processes:
+Both CSV paths are required positional arguments; `-o/--output` chooses the destination (default `aviation.db` in the current directory). The script processes:
 - `airports.csv`: Airport locations and elevations
 - `runways.csv`: Runway coordinates, headings, and displaced thresholds
 
+The database is built into a temporary file next to the destination and moved into place with `os.replace()` only after a successful build, so an aborted or failing run can never leave a partial/corrupt `aviation.db` behind. A summary of every filter's counts is printed at the end.
+
 Filtering rules applied by the script:
+- Airports with a blank `latitude_deg`/`longitude_deg` are skipped: the app reads coordinates as non-optional doubles, so such an airport would silently sit at 0,0 (Null Island). Runways belonging to a skipped airport are removed too. None exist in the current data
 - Runways that are closed, have missing end coordinates or identifiers, or whose two ends share identical coordinates are skipped
+- Two runway ends with the same identifier at the same airport collide on the `PRIMARY KEY (airport_ident, ident)`: the first is kept and the rest are skipped with a warning and counted, rather than aborting the build. None exist in the current data
 - Each runway end is stored as its own row; ends with no elevation data are skipped, so every runway in the database has an elevation
 - Airports left with no runways after this filtering are removed
 - Missing runway end headings are backfilled: when `le_heading_degT`/`he_heading_degT` is blank, the script stores the true initial great-circle bearing from that end's coordinates to the opposite end's (headings present in the CSV are kept as is). Since runways with identical end coordinates are skipped, every runway in the database has a heading, so `AirportSelection.calculateAimingPoint()` can always apply the displaced threshold and aiming point

@@ -9,8 +9,8 @@ import sqlite3
 import csv
 import math
 import os
-
-global args
+import tempfile
+from collections import Counter
 
 
 def initial_bearing(lat1, lon1, lat2, lon2):
@@ -30,13 +30,10 @@ def heading(csv_heading, from_lat, from_lon, to_lat, to_lon):
     return initial_bearing(from_lat, from_lon, to_lat, to_lon)
 
 
-def create_database(db_path='aviation.db'):
-    """Create SQLite database with airports and runways tables."""
+def build_database(db_path, airports_csv, runways_csv):
+    """Populate a fresh SQLite database at db_path. Returns a Counter of stats."""
 
-    # Remove existing database if it exists
-    if os.path.exists(db_path):
-        os.remove(db_path)
-        print(f"Removed existing database: {db_path}")
+    stats = Counter()
 
     # Create connection
     conn = sqlite3.connect(db_path)
@@ -77,21 +74,26 @@ def create_database(db_path='aviation.db'):
 
     # Load airports data
     print("Loading airports data...")
-    with open(args.airports, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        airports_data = []
-        for row in reader:
-            airports_data.append((
-                row['ident'],
-                row['name'],
-                row['iata_code'] if row['iata_code'] else None,
-                float(row['latitude_deg']) if row['latitude_deg'] else None,
-                float(row['longitude_deg']) if row['longitude_deg'] else None,
-                int(row['elevation_ft']) if row['elevation_ft'] else None,
-                row['local_code'] if row['local_code'] else None,
-                row['gps_code'] if row['gps_code'] else None,
-                row['icao_code'] if row['icao_code'] else None,
-            ))
+    with open(airports_csv, 'r', encoding='utf-8') as f:
+        rows = list(csv.DictReader(f))
+
+        # The app reads coordinates as non-optional doubles, so an airport
+        # without them would silently end up at 0,0 (Null Island)
+        located = [row for row in rows
+                   if row['latitude_deg'] and row['longitude_deg']]
+        stats['airports_without_coordinates'] = len(rows) - len(located)
+
+        airports_data = [(
+            row['ident'],
+            row['name'],
+            row['iata_code'] if row['iata_code'] else None,
+            float(row['latitude_deg']),
+            float(row['longitude_deg']),
+            int(row['elevation_ft']) if row['elevation_ft'] else None,
+            row['local_code'] if row['local_code'] else None,
+            row['gps_code'] if row['gps_code'] else None,
+            row['icao_code'] if row['icao_code'] else None,
+        ) for row in located]
 
         cursor.executemany('''
             INSERT INTO airports VALUES (?,?,?,?,?,?,?,?,?)
@@ -100,7 +102,7 @@ def create_database(db_path='aviation.db'):
 
     # Load runways data
     print("Loading runways data...")
-    with open(args.runways, 'r', encoding='utf-8') as f:
+    with open(runways_csv, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             # Add one row for each side of the runway
@@ -150,16 +152,30 @@ def create_database(db_path='aviation.db'):
                     ) if row['he_displaced_threshold_ft'] else 0
             )
 
+            sides = ((side1, row['le_heading_degT']),
+                     (side2, row['he_heading_degT']))
+
             # Skip runway ends without elevation data (index 6 is elevation_ft)
-            for side in filter(lambda s: s[6] is not None, (side1, side2)):
+            for side, csv_heading in sides:
+                if side[6] is None:
+                    stats['ends_without_elevation'] += 1
+                    continue
+
                 try:
                     cursor.execute('''
                         INSERT INTO runways VALUES (?,?,?,?,?,?,?,?,?)
                     ''', side)
 
-                except Exception as e:
-                    print(f"Error inserting runway {side}: {e}")
-                    raise
+                except sqlite3.IntegrityError:
+                    # Two ends with the same identifier at the same airport:
+                    # keep the first and carry on rather than abort the build
+                    stats['duplicate_ends'] += 1
+                    print(f"Warning: skipping duplicate runway end "
+                          f"{side[0]}/{side[1]}")
+                    continue
+
+                if not csv_heading:
+                    stats['headings_backfilled'] += 1
 
     # Create indexes for better query performance
     print("Creating indexes...")
@@ -170,30 +186,67 @@ def create_database(db_path='aviation.db'):
         cursor.execute(
             f'CREATE INDEX idx_airports_{col} ON airports({col})')
 
+    # Remove runways whose airport was filtered out above
+    cursor.execute('''
+        DELETE FROM runways
+        WHERE airport_ident NOT IN (SELECT ident FROM airports)
+    ''')
+    stats['orphaned_runways'] = cursor.rowcount
+
     # Remove airports without associated runways
     print("Removing airports without runways...")
     cursor.execute('''
         DELETE FROM airports
         WHERE ident NOT IN (SELECT DISTINCT airport_ident FROM runways)
     ''')
-    removed_count = cursor.rowcount
-    print(f"Removed {removed_count} airports without runways")
+    stats['airports_without_runways'] = cursor.rowcount
+    print(f"Removed {stats['airports_without_runways']} airports without runways")
 
     # Commit and close
     conn.commit()
     cursor.execute('VACUUM')
-    print(f"\nDatabase created successfully: {db_path}")
 
-    # Print some statistics
     cursor.execute('SELECT COUNT(*) FROM airports')
-    airport_count = cursor.fetchone()[0]
+    stats['airports'] = cursor.fetchone()[0]
     cursor.execute('SELECT COUNT(*) FROM runways')
-    runway_count = cursor.fetchone()[0]
-
-    print(f"Total airports: {airport_count}")
-    print(f"Total runways: {runway_count}")
+    stats['runways'] = cursor.fetchone()[0]
 
     conn.close()
+    return stats
+
+
+def create_database(db_path, airports_csv, runways_csv):
+    """Build the database out of line and move it into place when complete."""
+
+    # Build into a temporary file next to the destination so that an aborted
+    # run can never leave a partial aviation.db behind
+    fd, tmp_path = tempfile.mkstemp(
+        prefix='.gen_sqlite-', suffix='.db',
+        dir=os.path.dirname(os.path.abspath(db_path)))
+    os.close(fd)
+
+    try:
+        stats = build_database(tmp_path, airports_csv, runways_csv)
+        os.chmod(tmp_path, 0o644)
+        os.replace(tmp_path, db_path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    print(f"\nDatabase created successfully: {db_path}")
+    print(f"Total airports: {stats['airports']}")
+    print(f"Total runways: {stats['runways']}")
+    print(f"Airports skipped (no coordinates): "
+          f"{stats['airports_without_coordinates']}")
+    print(f"Airports removed (no runways): {stats['airports_without_runways']}")
+    print(f"Runways removed (no airport): {stats['orphaned_runways']}")
+    print(f"Runway ends skipped (no elevation): "
+          f"{stats['ends_without_elevation']}")
+    print(f"Runway ends skipped (duplicate identifier): "
+          f"{stats['duplicate_ends']}")
+    print(f"Runway headings backfilled: {stats['headings_backfilled']}")
+
+    return stats
 
 
 def get_args():
@@ -201,9 +254,12 @@ def get_args():
         description="Generate SQLite database from airports and runways CSV files.")
     parser.add_argument('airports', help='Path to airports CSV file')
     parser.add_argument('runways', help='Path to runways CSV file')
+    parser.add_argument('-o', '--output', default='aviation.db',
+                        help='Path of the SQLite database to write '
+                             '(default: %(default)s)')
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = get_args()
-    create_database()
+    create_database(args.output, args.airports, args.runways)
