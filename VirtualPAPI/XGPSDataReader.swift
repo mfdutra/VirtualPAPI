@@ -128,7 +128,10 @@ class XGPSDataReader: ObservableObject {
 
     /// Parses an XGPS packet ("XGPS<name>,lon,lat,alt_m,track,speed_m/s").
     /// Returns nil if the packet is too short, has the wrong header, has
-    /// fewer than 6 comma-separated fields, or any used field isn't numeric.
+    /// fewer than 6 comma-separated fields, any used field isn't numeric or
+    /// is non-finite (Double(String) accepts "nan"/"inf"), latitude/longitude
+    /// are outside ±90/±180, or altitude is outside
+    /// GenericLocation.plausibleAltitudeRange. Track is normalized to 0..<360.
     nonisolated static func parseXGPS(_ data: Data) -> XGPSFix? {
         guard data.count >= 41,
             String(data: data.prefix(4), encoding: .ascii) == "XGPS",
@@ -140,14 +143,22 @@ class XGPSDataReader: ObservableObject {
         let values = components[1...5].compactMap {
             Double($0.trimmingCharacters(in: .whitespacesAndNewlines.union(.controlCharacters)))
         }
-        guard values.count == 5 else { return nil }
+        guard values.count == 5, values.allSatisfy(\.isFinite) else { return nil }
+
+        let altitude = values[2] * 3.2808399  // meter to feet
+        guard
+            GenericLocation.isValidCoordinate(latitude: values[1], longitude: values[0]),
+            GenericLocation.plausibleAltitudeRange.contains(altitude)
+        else { return nil }
+
+        let track = values[3].truncatingRemainder(dividingBy: 360)
 
         return XGPSFix(
             latitude: values[1],
             longitude: values[0],
-            altitude: values[2] * 3.2808399,  // meter to feet
+            altitude: altitude,
             groundSpeed: values[4] * 1.9438445,  // m/s to knots
-            track: values[3]
+            track: track < 0 ? track + 360 : track
         )
     }
 

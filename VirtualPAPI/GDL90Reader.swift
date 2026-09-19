@@ -354,6 +354,11 @@ class GDL90Reader: ObservableObject {
         let lonSigned = (lonRaw & 0x800000) != 0 ? lonRaw - 0x1000000 : lonRaw
         let longitude = Double(lonSigned) * (180.0 / pow(2.0, 23.0))
 
+        // The 24-bit latitude field spans ±180, so a corrupt value can land
+        // outside ±90; drop the report rather than feed it to the display.
+        guard GenericLocation.isValidCoordinate(latitude: latitude, longitude: longitude)
+        else { return }
+
         // Bytes 11-12: Altitude (12-bit value, resolution 25 feet, offset -1000 feet)
         // Python: altMetric = _thunkByte(msgBytes[11], 0xff, 4) + _thunkByte(msgBytes[12], 0xf0, -4)
         // Which is: (msgBytes[11] << 4) | ((msgBytes[12] & 0xf0) >> 4)

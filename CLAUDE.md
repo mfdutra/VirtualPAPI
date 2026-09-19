@@ -219,10 +219,11 @@ These match the SQLite schema in `scripts/aviation.db`.
 The XGPS protocol expects packets starting with "XGPS" header followed by comma-separated values. The parser is the pure `nonisolated static func parseXGPS(_ data: Data) -> XGPSFix?` (XGPSDataReader.swift:119-157), called by `processXGPSData(_:)` (XGPSDataReader.swift:159-170), and unit-tested directly ("XGPS Parser Tests" suite):
 1. Validates 41+ byte packets with "XGPS" header and at least 6 comma-separated fields
 2. Extracts longitude (component 1), latitude (component 2), altitude in meters (component 3), track in degrees (component 4), speed in m/s (component 5); fields are trimmed of whitespace/control characters
-3. Rejects the whole packet (returns `nil`, no state update) if any of those fields isn't numeric — never substitutes 0
+3. Rejects the whole packet (returns `nil`, no state update) if any of those fields isn't numeric — never substitutes 0 — or is non-finite (`Double(String)` accepts "nan"/"inf"/hex floats)
 4. Converts altitude from meters to feet (×3.2808399)
-5. Converts speed from m/s to knots (×1.9438445)
-6. `processXGPSData` updates both `XGPSDataReader` and `GenericLocation` states (only when X-Plane is selected source)
+5. Rejects the packet if latitude/longitude fall outside ±90/±180 (`GenericLocation.isValidCoordinate`) or altitude falls outside `GenericLocation.plausibleAltitudeRange` (-2,000..60,000 ft)
+6. Converts speed from m/s to knots (×1.9438445) and normalizes track to 0..<360
+7. `processXGPSData` updates both `XGPSDataReader` and `GenericLocation` states (only when X-Plane is selected source)
 
 **Why a raw BSD socket instead of `NWListener`:** `NWListener`'s UDP mode creates a per-sender `NWConnection` by internally `connect()`-ing a socket to the remote address ("established-over-unconnected"). On BSD-derived kernels, a connected socket takes delivery priority over other apps' plain wildcard-bound listening sockets on the same port, so this used to silently steal X-Plane's broadcast packets away from apps like ForeFlight running at the same time. `XGPSDataReader.startListening()` (XGPSDataReader.swift:27-73) instead opens a raw socket with `SO_REUSEADDR`/`SO_REUSEPORT`, binds to `INADDR_ANY:49002`, and only ever calls `recvfrom()` on a dedicated background `Thread` — never `connect()` — so it behaves like a normal passive listener and coexists with other apps.
 
@@ -239,8 +240,8 @@ The GDL90 protocol is a standard aviation data link protocol used by many portab
 
 **Message Parsing:**
 - Message ID 10 (Ownship Report): Position, pressure altitude, ground speed, track
-  - 24-bit signed lat/lon with LSB = 180/2^23 degrees
-  - 12-bit altitude with 25 ft resolution, -1000 ft offset (0xFFF = invalid, decoded to nil by `static func GDL90Reader.decodePressureAltitude(_:)`; `GDL90Reader.altitude` is `Double?` and the debug view shows "Invalid")
+  - 24-bit signed lat/lon with LSB = 180/2^23 degrees; reports with latitude outside ±90 (the field spans ±180) are dropped via `GenericLocation.isValidCoordinate`
+  - 12-bit altitude with 25 ft resolution, -1000 ft offset
   - 12-bit velocity with 1 knot resolution (0xFFF = invalid)
   - 8-bit track with LSB = 360/256 = 1.40625 degrees
 - Message ID 11 (Ownship Geometric Altitude): 16-bit signed with 5 ft resolution
@@ -269,6 +270,7 @@ The glide slope deviation logic (GenericLocation.swift:222-244):
 - Configurable descent angle (default 3.0°, stored in `AirportSelection.descentAngle`)
 - Calculates actual angle: `atan((altitude - targetElevation) / distanceInFeet) * 180 / π`
 - Deviation = actual angle - desired descent angle
+- Backstop: if distance is not positive or the deviation is non-finite, `updateAngleToDestination()` keeps the previous values, so NaN can never enter the EMA (which would otherwise stay NaN until `reset()` and peg the indicator, since `min`/`max` clamping doesn't catch NaN)
 - Positive deviation = aircraft above glide slope (fly down)
 - Exponential Moving Average (EMA) smoothing applied: `EMA_new = alpha * current + (1 - alpha) * EMA_previous`
   - Alpha configurable via `AppSettings.emaAlpha` (0.2 = smooth, 1.0 = instantaneous)

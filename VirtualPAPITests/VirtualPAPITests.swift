@@ -59,6 +59,35 @@ struct XGPSParserTests {
                 packet("XGPZSimulator,-122.123450,37.543210,100.0,270.5,50.0")) == nil)
         #expect(XGPSDataReader.parseXGPS(packet("XGPS1,1,2,3,4,5")) == nil)
     }
+
+    @Test(
+        "Packet with non-finite or out-of-range values is rejected",
+        arguments: [
+            "XGPSSimulator,-122.123450,nan,100.0,270.5,50.0",
+            "XGPSSimulator,-122.123450,37.543210,inf,270.5,50.0",
+            "XGPSSimulator,-122.123450,37.543210,100.0,-infinity,50.0",
+            "XGPSSimulator,-122.123450,37.543210,100.0,270.5,nan",
+            "XGPSSimulator,-122.123450,0x1p400,100.0,270.5,50.0",
+            "XGPSSimulator,-122.123450,91.000000,100.0,270.5,50.0",
+            "XGPSSimulator,181.000000,37.543210,100.0,270.5,50.0",
+            "XGPSSimulator,-122.123450,37.543210,20000.0,270.5,50.0",
+            "XGPSSimulator,-122.123450,37.543210,-1000.0,270.5,50.0",
+        ])
+    func testRejectsNonFiniteOrOutOfRange(_ s: String) {
+        #expect(XGPSDataReader.parseXGPS(packet(s)) == nil)
+    }
+
+    @Test("Track is normalized to 0..<360")
+    func testTrackNormalized() throws {
+        let fix = try #require(
+            XGPSDataReader.parseXGPS(
+                packet("XGPSSimulator,-122.123450,37.543210,100.0,-90.0,50.0")))
+        #expect(fix.track == 270)
+        let wrapped = try #require(
+            XGPSDataReader.parseXGPS(
+                packet("XGPSSimulator,-122.123450,37.543210,100.0,360.0,50.0")))
+        #expect(wrapped.track == 0)
+    }
 }
 
 // MARK: - GenericLocation Tests
@@ -178,6 +207,45 @@ struct GenericLocationTests {
 
         // Should be close to on glide slope (within acceptable deviation)
         #expect(abs(location.gsOffset) < 0.1)
+    }
+
+    @Test("Non-finite deviation never enters the smoothing filter")
+    func testNonFiniteDeviationBackstop() async {
+        let location = GenericLocation()
+        let selection = AirportSelection()
+        selection.selectedRunway = Runway(
+            airport_ident: "TEST",
+            ident: "18",
+            length_ft: 10000,
+            width_ft: 150,
+            latitude_deg: 37.7749,
+            longitude_deg: -122.4194,
+            elevation_ft: 100,
+            heading_degT: 180,
+            displaced_threshold_ft: 0
+        )
+        selection.setTargets()
+        location.airportSelection = selection
+
+        // Called synchronously on the main actor, so the 1 s timer can't
+        // interleave and overwrite distanceToDestination.
+        location.distanceToDestination = 3
+        location.altitude = 1054
+        location.updateAngleToDestination()
+        let good = location.smoothedAngleDeviation
+        #expect(good.isFinite)
+
+        location.altitude = .nan
+        location.updateAngleToDestination()
+        #expect(location.smoothedAngleDeviation == good)
+        #expect(location.angleDeviation.isFinite)
+
+        // 0/0: on the target at target elevation
+        location.altitude = 100
+        location.distanceToDestination = 0
+        location.updateAngleToDestination()
+        #expect(location.smoothedAngleDeviation == good)
+        #expect(location.angleDeviation.isFinite)
     }
 
     // NOTE: Timer-based glide slope tests removed due to flakiness

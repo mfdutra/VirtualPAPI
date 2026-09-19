@@ -70,6 +70,16 @@ class GenericLocation: ObservableObject {
         self.isFirstAngleUpdate = true
     }
 
+    /// Altitudes (feet) accepted from a location source. Anything outside
+    /// this band is treated as a corrupt packet rather than a real aircraft.
+    static let plausibleAltitudeRange: ClosedRange<Double> = -2_000...60_000
+
+    /// True if latitude/longitude are finite and within ±90/±180 degrees.
+    /// (NaN fails both range checks, so it's rejected too.)
+    static func isValidCoordinate(latitude: Double, longitude: Double) -> Bool {
+        (-90.0...90.0).contains(latitude) && (-180.0...180.0).contains(longitude)
+    }
+
     /// Update the current location coordinates
     /// - Parameters:
     ///   - latitude: Latitude in degrees
@@ -222,13 +232,20 @@ class GenericLocation: ObservableObject {
         }
     }
 
-    private func updateAngleToDestination() {
+    func updateAngleToDestination() {
         let distanceInFeet = self.distanceToDestination * 6076.1155
         let altToLose = altitude - (self.airportSelection?.targetElevation)!
 
-        self.angleToDestination = atan(altToLose / distanceInFeet) * 180 / .pi
-        self.angleDeviation =
-            self.angleToDestination - airportSelection!.descentAngle
+        // Backstop: a non-finite deviation would poison the EMA below until
+        // the next reset(), and min/max clamping doesn't catch NaN (it pegs
+        // the indicator full scale). Keep the previous values instead.
+        guard distanceInFeet > 0 else { return }
+        let angleToDestination = atan(altToLose / distanceInFeet) * 180 / .pi
+        let angleDeviation = angleToDestination - airportSelection!.descentAngle
+        guard angleDeviation.isFinite else { return }
+
+        self.angleToDestination = angleToDestination
+        self.angleDeviation = angleDeviation
 
         // Apply exponential moving average smoothing
         if isFirstAngleUpdate {
