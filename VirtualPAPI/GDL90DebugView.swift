@@ -136,7 +136,7 @@ struct GDL90DebugView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("GDL90 Protocol")
                         .font(.headline)
-                    Text("Listening on UDP port 4000")
+                    Text("Listening on UDP ports 4000 and 43211")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
