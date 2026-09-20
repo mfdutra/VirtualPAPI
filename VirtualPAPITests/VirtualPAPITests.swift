@@ -176,9 +176,10 @@ struct GenericLocationTests {
     }
 
     @Test("Glide slope offset calculation - on glide slope")
+    @MainActor
     func testGlideSlopeOnGlide() async {
-        let location = await GenericLocation()
-        let selection = await AirportSelection()
+        let location = GenericLocation()
+        let selection = AirportSelection()
 
         // Setup a runway
         let runway = Runway(
@@ -194,7 +195,7 @@ struct GenericLocationTests {
         )
 
         selection.selectedRunway = runway
-        await selection.setTargets()
+        selection.setTargets()
         location.airportSelection = selection
 
         // Set aircraft position 3nm out at 954 feet (100 + 3*6076*tan(3°))
@@ -210,6 +211,7 @@ struct GenericLocationTests {
     }
 
     @Test("Non-finite deviation never enters the smoothing filter")
+    @MainActor
     func testNonFiniteDeviationBackstop() async {
         let location = GenericLocation()
         let selection = AirportSelection()
@@ -253,9 +255,10 @@ struct GenericLocationTests {
     // The glide slope calculation logic is covered by the testGlideSlopeOnGlide test above
 
     @Test("PAPI position calculation - on glide path")
+    @MainActor
     func testPapiPositionOnGlidePath() async {
-        let location = await GenericLocation()
-        let selection = await AirportSelection()
+        let location = GenericLocation()
+        let selection = AirportSelection()
 
         let runway = Runway(
             airport_ident: "TEST",
@@ -270,7 +273,7 @@ struct GenericLocationTests {
         )
 
         selection.selectedRunway = runway
-        await selection.setTargets()
+        selection.setTargets()
         location.airportSelection = selection
 
         // Set aircraft on glide path (angle deviation = 0)

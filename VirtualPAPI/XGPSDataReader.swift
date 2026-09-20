@@ -83,9 +83,11 @@ class XGPSDataReader: ObservableObject {
         // The loop only returns on a fatal socket error. If this thread is
         // still the active receiver, stopListening() didn't cause it, so
         // surface the failure instead of silently going quiet.
-        let thread = Thread.current
+        let threadID = ObjectIdentifier(Thread.current)
         Task { @MainActor [weak self] in
-            guard let self, self.receiveThread === thread else { return }
+            guard let self,
+                self.receiveThread.map(ObjectIdentifier.init) == threadID
+            else { return }
             print("XGPS: receive loop exited unexpectedly")
             self.stopListening()
         }

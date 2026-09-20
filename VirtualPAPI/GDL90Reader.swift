@@ -146,10 +146,11 @@ class GDL90Reader: ObservableObject {
         // The loop only returns on a fatal socket error. If this thread is
         // still registered, stopListening() didn't cause it: drop this
         // socket, and mark disconnected once no receive loops remain.
-        let thread = Thread.current
+        let threadID = ObjectIdentifier(Thread.current)
         Task { @MainActor [weak self] in
             guard let self,
-                let index = self.receiveThreads.firstIndex(where: { $0 === thread })
+                let index = self.receiveThreads.firstIndex(
+                    where: { ObjectIdentifier($0) == threadID })
             else { return }
             print("GDL90: receive loop for fd \(fd) exited unexpectedly")
             self.receiveThreads.remove(at: index)

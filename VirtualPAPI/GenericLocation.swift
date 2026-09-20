@@ -72,11 +72,11 @@ class GenericLocation: ObservableObject {
 
     /// Altitudes (feet) accepted from a location source. Anything outside
     /// this band is treated as a corrupt packet rather than a real aircraft.
-    static let plausibleAltitudeRange: ClosedRange<Double> = -2_000...60_000
+    nonisolated static let plausibleAltitudeRange: ClosedRange<Double> = -2_000...60_000
 
     /// True if latitude/longitude are finite and within ±90/±180 degrees.
     /// (NaN fails both range checks, so it's rejected too.)
-    static func isValidCoordinate(latitude: Double, longitude: Double) -> Bool {
+    nonisolated static func isValidCoordinate(latitude: Double, longitude: Double) -> Bool {
         (-90.0...90.0).contains(latitude) && (-180.0...180.0).contains(longitude)
     }
 
