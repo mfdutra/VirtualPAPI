@@ -15,6 +15,7 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
     @Published var currentLocation: CLLocationCoordinate2D?
     @Published var elevation: Double?
     @Published var accuracy: CLLocationAccuracy = 0
+    @Published var verticalAccuracy: CLLocationAccuracy = 0
     @Published var groundSpeed: Double?  // in knots
     @Published var track: Double?  // course in degrees (0-360)
     @Published var isTracking = false
@@ -70,6 +71,17 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
         locationManager.requestWhenInUseAuthorization()
     }
 
+    /// Vertical accuracy (metres, 1 sigma) above which the altitude is too
+    /// uncertain to trust for glidepath guidance. 15 m is about 0.45 degrees
+    /// of angular error at 1 NM on a 3 degree path, still inside the 0.7
+    /// degree full-scale deflection of the display.
+    static let poorVerticalAccuracy: CLLocationAccuracy = 15
+
+    /// True when the last accepted fix's altitude is too uncertain to trust.
+    var verticalAccuracyIsPoor: Bool {
+        verticalAccuracy > Self.poorVerticalAccuracy
+    }
+
     deinit {
         stopTracking()
     }
@@ -82,9 +94,20 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
     ) {
         guard let location = locations.last else { return }
 
+        // CoreLocation signals an invalid coordinate with a negative
+        // horizontalAccuracy and an invalid altitude with a negative
+        // verticalAccuracy (the altitude is then typically 0, which would
+        // peg the glidepath display at "fly up"). Drop the whole fix rather
+        // than feed either one to the guidance; the location then simply
+        // goes stale.
+        guard location.horizontalAccuracy >= 0,
+            location.verticalAccuracy >= 0
+        else { return }
+
         DispatchQueue.main.async {
             self.currentLocation = location.coordinate
             self.accuracy = location.horizontalAccuracy
+            self.verticalAccuracy = location.verticalAccuracy
             self.elevation = location.altitude
 
             // Extract ground speed (convert m/s to knots)

@@ -108,6 +108,8 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 - Instantiated in VirtualPAPIApp and starts tracking on app launch (VirtualPAPIApp.swift:40-41)
 - Authorization handled via `locationManagerDidChangeAuthorization(_:)` (reads `manager.authorizationStatus`; the deprecated `didChangeAuthorization:` callback is not used). On first launch `startTracking()` only requests permission and records intent (`isTracking = true`); the callback starts updates once authorized. `startTracking()` is idempotent (private `isUpdatingLocation` guard), so the callback re-invoking it never starts updates twice. Denied/restricted stops updates but keeps `isTracking`, so tracking resumes if permission is later granted in Settings
 - Updates `GenericLocation` with position, speed, and track data
+- CoreLocation's validity convention (negative = invalid) is applied to all four fields, not just speed/course: a fix with a negative `horizontalAccuracy` (invalid coordinate) or negative `verticalAccuracy` (invalid altitude, typically reported as `altitude == 0`, which would peg the glidepath at "fly up") is dropped whole in `didUpdateLocations` before anything is published, so the previous fix stands and the location goes stale on its own
+- `verticalAccuracy` (metres, 1 sigma) is published alongside the existing horizontal `accuracy`; `verticalAccuracyIsPoor` is true above `HighFrequencyLocationTracker.poorVerticalAccuracy` (15 m, about 0.45° at 1 NM on a 3° path, inside the display's 0.7° full-scale deflection) and drives the ContentView caution
 - Runs continuously but only updates GenericLocation when selected as active source
 
 **X-Plane Simulator** (`LocationSource.xPlane`):
@@ -150,6 +152,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
   - Navigation to AirportSelectionView and SettingsView
   - Location staleness warning when GPS signal is lost
   - Pressure altitude caution under the DTG line: orange "⚠ PRESS ALT", shown only when GDL90 is the active source, location isn't stale, and it has fallen back to pressure altitude (nothing is shown when using geometric altitude; internal GPS and X-Plane are always MSL)
+  - Uncertain GPS altitude caution under the DTG line: orange "⚠ GPS ALT ±NN ft" (`static func ContentView.formatVerticalAccuracy(_:)`, metres converted to feet and rounded to 10), shown only when internal GPS is the active source, location isn't stale, and `HighFrequencyLocationTracker.verticalAccuracyIsPoor`. Guidance keeps working; the pilot is just told the altitude behind it is uncertain
   - Debug info display (lat/lon/alt/speed/track/source) when enabled
 
 - **GlideSlopeView.swift**: ILS-style glide slope indicator
@@ -329,7 +332,7 @@ Tests use Swift Testing. `.serialized` only orders tests *within* a suite; separ
 
 Tests that construct or touch a main-actor-isolated type (`GenericLocation`, `AirportSelection`, the readers) must be annotated `@MainActor` — on the suite (as `XGPSDataReaderTests` does) or on the individual test. Without it an `async` test body lands in a nonisolated context and every property access warns ("main actor-isolated property ... can not be mutated from a nonisolated context"), which is an error in the Swift 6 language mode. Once the test is `@MainActor`, drop the `await` on synchronous isolated calls such as `selection.setTargets()`, or it warns in turn about a redundant `await`.
 
-Test files: `VirtualPAPITests/VirtualPAPITests.swift` (everything except GDL90 framing) and `VirtualPAPITests/GDL90ParserTests.swift` (GDL90 wire-format parsing plus the `GDL90TestFrame` frame builder). The test target is a file-system synchronized group, so new files in `VirtualPAPITests/` are picked up without editing the project file.
+Test files: `VirtualPAPITests/VirtualPAPITests.swift` (everything except GDL90 framing and internal GPS), `VirtualPAPITests/GDL90ParserTests.swift` (GDL90 wire-format parsing plus the `GDL90TestFrame` frame builder) and `VirtualPAPITests/LocationTrackerTests.swift` (the "Internal GPS Validity Tests" and "Vertical Accuracy Caution Tests" suites, which drive `HighFrequencyLocationTracker`'s `didUpdateLocations` with synthesized `CLLocation`s; since the delegate hands the fix to the main queue, those tests `await Task.yield()` until it lands). The test target is a file-system synchronized group, so new files in `VirtualPAPITests/` are picked up without editing the project file.
 
 ### Concurrency
 - `XGPSDataReader` and `GDL90Reader` use `@MainActor` to ensure all UI updates happen on main thread

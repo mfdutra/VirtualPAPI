@@ -13,6 +13,7 @@ struct ContentView: View {
     @EnvironmentObject var appSettings: AppSettings
     @EnvironmentObject var airportSelection: AirportSelection
     @EnvironmentObject var gdl90Reader: GDL90Reader
+    @EnvironmentObject var locationTracker: HighFrequencyLocationTracker
     @State private var navigateToAirportSelection = false
 
     var body: some View {
@@ -72,6 +73,22 @@ struct ContentView: View {
                         {
                             Label(
                                 "PRESS ALT",
+                                systemImage: "exclamationmark.triangle.fill"
+                            )
+                                .font(.caption.bold())
+                                .foregroundColor(.orange)
+                        }
+
+                        // A phone's GPS altitude can be uncertain by more
+                        // than the full-scale deflection of the display
+                        if appSettings.locationSource == .internalGPS,
+                            !genericLocation.locationIsStale,
+                            locationTracker.verticalAccuracyIsPoor
+                        {
+                            Label(
+                                ContentView.formatVerticalAccuracy(
+                                    locationTracker.verticalAccuracy
+                                ),
                                 systemImage: "exclamationmark.triangle.fill"
                             )
                                 .font(.caption.bold())
@@ -224,6 +241,12 @@ struct ContentView: View {
         }
         // Adding 0 turns -0 into 0 so it doesn't display as "-0"
         return String(format: "%.0f", (vs / 10).rounded() * 10 + 0)
+    }
+
+    // Caution text for an uncertain GPS altitude, e.g. "GPS ALT \u{00B1}70 ft"
+    static func formatVerticalAccuracy(_ verticalAccuracy: Double) -> String {
+        let feet = (verticalAccuracy * 3.2808399 / 10).rounded() * 10
+        return String(format: "GPS ALT \u{00B1}%.0f ft", feet)
     }
 
     // If location data is lost, purple things become yellow
