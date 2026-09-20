@@ -11,10 +11,9 @@ import SQLite3
 
 /// Tells SQLite to copy the bound value, so it doesn't have to outlive the
 /// `sqlite3_bind_*` call (SQLITE_STATIC would promise that it does).
-private let SQLITE_TRANSIENT = unsafeBitCast(
-    -1,
-    to: sqlite3_destructor_type.self
-)
+private nonisolated var SQLITE_TRANSIENT: sqlite3_destructor_type {
+    unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+}
 
 // MARK: - String Extension for Base32 Decoding
 
