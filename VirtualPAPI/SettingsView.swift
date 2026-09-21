@@ -121,6 +121,10 @@ struct SettingsView: View {
 
                 NavigationLink("GDL90 Debug", destination: GDL90DebugView())
                 NavigationLink(
+                    "Internal GPS Debug",
+                    destination: InternalLocationDebugView()
+                )
+                NavigationLink(
                     "Generic location debug",
                     destination: GenericLocationDebugView()
                 )

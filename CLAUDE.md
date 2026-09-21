@@ -110,6 +110,9 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 - Updates `GenericLocation` with position, speed, and track data
 - CoreLocation's validity convention (negative = invalid) is applied to all four fields, not just speed/course: a fix with a negative `horizontalAccuracy` (invalid coordinate) or negative `verticalAccuracy` (invalid altitude, typically reported as `altitude == 0`, which would peg the glidepath at "fly up") is dropped whole in `didUpdateLocations` before anything is published, so the previous fix stands and the location goes stale on its own
 - `verticalAccuracy` (metres, 1 sigma) is published alongside the existing horizontal `accuracy`; `verticalAccuracyIsPoor` is true above `HighFrequencyLocationTracker.poorVerticalAccuracy` (15 m, about 0.45° at 1 NM on a 3° path, inside the display's 0.7° full-scale deflection) and drives the ContentView caution
+- Diagnostics for InternalLocationDebugView are published too: `lastRawLocation` (every fix CoreLocation delivers, set *before* the validity guard, so dropped fixes are visible), `lastRejectionReason` (from the pure `static func rejectionReason(horizontalAccuracy:verticalAccuracy:)`, which the guard itself uses), `acceptedFixCount`/`rejectedFixCount`, `lastError`/`lastErrorTime` (from `didFailWithError`, named via `static func describe(_:)` since `localizedDescription` is only "kCLErrorDomain error N"), `updatesPaused` (pause/resume callbacks), `accuracyAuthorization`, `locationServicesEnabled` (queried off the main thread, since `CLLocationManager.locationServicesEnabled()` can block), and read-only manager configuration (`desiredAccuracy`, `distanceFilter`, `activityType`, `pausesLocationUpdatesAutomatically`, `headingFilter`)
+- Compass heading (`heading: CLHeading?`) is diagnostics only (guidance uses GPS track): `startHeadingUpdates()`/`stopHeadingUpdates()` are called by InternalLocationDebugView's `onAppear`/`onDisappear`, so heading runs only while that screen is shown. This is separate from the location-source lifecycle, which views must not touch
+- In the Simulator every simulated fix (`simctl location set`, and built-in scenarios such as "Freeway Drive") arrives with `verticalAccuracy = -1` and `altitude = 0`, because `simctl` has no altitude parameter. The guard drops all of them, so internal GPS guidance can't be exercised in the Simulator with simctl; InternalLocationDebugView shows these as "Rejected"
 - Runs continuously but only updates GenericLocation when selected as active source
 
 **X-Plane Simulator** (`LocationSource.xPlane`):
@@ -185,13 +188,17 @@ The app supports three location sources, selectable via `AppSettings.locationSou
   - Aviation database info (last modified date, airport/runway counts)
   - Database update functionality (downloads latest data from remote source)
   - Debug mode toggle
-  - Links to debug views (GDL90, Generic Location, Destination Map)
+  - Links to debug views (GDL90, Internal GPS, Generic Location, Destination Map)
   - "Destination in Google Maps" button: opens a `https://www.google.com/maps/search/?api=1&query=lat,lon` universal link at the selected target coordinates (Google Maps app if installed, otherwise the browser); disabled when no destination is selected
 
 **Debug Views:**
 
 - **GDL90DebugView.swift**: Real-time GDL90 protocol diagnostics
   - Observes `GDL90Reader` only; it never starts or stops the listener (VirtualPAPIApp owns the lifecycle via the selected source). Shows a note when GDL90 is not the selected location source, since no data will arrive then
+- **InternalLocationDebugView.swift**: Everything CoreLocation reports for the internal GPS
+  - Status (authorization, accuracy authorization, Location Services, tracking/updating/paused, accepted/rejected fix counts, last error), the last raw fix with whether the guidance accepted or rejected it and why (coordinate, horizontal accuracy, MSL and ellipsoidal altitude, vertical accuracy, speed and speed accuracy, course and course accuracy, floor, simulated-by-software / produced-by-accessory), compass heading (magnetic, true, accuracy, raw magnetic field) and the manager configuration
+  - Negative (invalid) CoreLocation values are shown as "invalid (N)" in red; vertical accuracy above `poorVerticalAccuracy` is orange. A `TimelineView` refreshes the age rows every second
+  - Formatting is in pure static helpers (`formatAccuracy(_:unit:)`, `describe(_:)` for authorization status and activity type, `describeDesiredAccuracy(_:)`)
 - **GenericLocationDebugView.swift**: Location calculation diagnostics
 - **DestinationMapView.swift**: Map visualization of destination and current position
 
@@ -332,7 +339,7 @@ Tests use Swift Testing. `.serialized` only orders tests *within* a suite; separ
 
 Tests that construct or touch a main-actor-isolated type (`GenericLocation`, `AirportSelection`, the readers) must be annotated `@MainActor` — on the suite (as `XGPSDataReaderTests` does) or on the individual test. Without it an `async` test body lands in a nonisolated context and every property access warns ("main actor-isolated property ... can not be mutated from a nonisolated context"), which is an error in the Swift 6 language mode. Once the test is `@MainActor`, drop the `await` on synchronous isolated calls such as `selection.setTargets()`, or it warns in turn about a redundant `await`.
 
-Test files: `VirtualPAPITests/VirtualPAPITests.swift` (everything except GDL90 framing and internal GPS), `VirtualPAPITests/GDL90ParserTests.swift` (GDL90 wire-format parsing plus the `GDL90TestFrame` frame builder) and `VirtualPAPITests/LocationTrackerTests.swift` (the "Internal GPS Validity Tests" and "Vertical Accuracy Caution Tests" suites, which drive `HighFrequencyLocationTracker`'s `didUpdateLocations` with synthesized `CLLocation`s; since the delegate hands the fix to the main queue, those tests `await Task.yield()` until it lands). The test target is a file-system synchronized group, so new files in `VirtualPAPITests/` are picked up without editing the project file.
+Test files: `VirtualPAPITests/VirtualPAPITests.swift` (everything except GDL90 framing and internal GPS), `VirtualPAPITests/GDL90ParserTests.swift` (GDL90 wire-format parsing plus the `GDL90TestFrame` frame builder) and `VirtualPAPITests/LocationTrackerTests.swift` (the "Internal GPS Validity Tests", "Vertical Accuracy Caution Tests" and "Internal GPS Diagnostics Tests" suites, which drive `HighFrequencyLocationTracker`'s `didUpdateLocations` with synthesized `CLLocation`s; since the delegate hands the fix to the main queue, those tests `await Task.yield()` until it lands). The test target is a file-system synchronized group, so new files in `VirtualPAPITests/` are picked up without editing the project file.
 
 ### Concurrency
 - `XGPSDataReader` and `GDL90Reader` use `@MainActor` to ensure all UI updates happen on main thread

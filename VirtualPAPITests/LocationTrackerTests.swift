@@ -161,3 +161,89 @@ struct VerticalAccuracyCautionTests {
         )
     }
 }
+
+// MARK: - Internal GPS Diagnostics Tests
+
+@Suite("Internal GPS Diagnostics Tests")
+@MainActor
+struct InternalGPSDiagnosticsTests {
+
+    @Test("Rejection reason names the invalid field")
+    func testRejectionReason() {
+        #expect(
+            HighFrequencyLocationTracker.rejectionReason(
+                horizontalAccuracy: 5,
+                verticalAccuracy: 8
+            ) == nil
+        )
+        #expect(
+            HighFrequencyLocationTracker.rejectionReason(
+                horizontalAccuracy: 5,
+                verticalAccuracy: -1
+            )?.contains("altitude") == true
+        )
+        // An invalid coordinate wins: without a position nothing is usable
+        #expect(
+            HighFrequencyLocationTracker.rejectionReason(
+                horizontalAccuracy: -1,
+                verticalAccuracy: -1
+            )?.contains("coordinate") == true
+        )
+    }
+
+    @Test("Dropped and accepted fixes are counted, raw fix kept")
+    func testFixCounters() {
+        let tracker = HighFrequencyLocationTracker()
+        let bad = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 37, longitude: -122),
+            altitude: 0,
+            horizontalAccuracy: 5,
+            verticalAccuracy: -1,
+            timestamp: Date()
+        )
+        let good = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 37, longitude: -122),
+            altitude: 300,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 8,
+            timestamp: Date()
+        )
+        let manager = CLLocationManager()
+
+        tracker.locationManager(manager, didUpdateLocations: [bad])
+        #expect(tracker.rejectedFixCount == 1)
+        #expect(tracker.acceptedFixCount == 0)
+        #expect(tracker.lastRawLocation === bad)
+        #expect(tracker.lastRejectionReason != nil)
+
+        tracker.locationManager(manager, didUpdateLocations: [good])
+        #expect(tracker.rejectedFixCount == 1)
+        #expect(tracker.acceptedFixCount == 1)
+        #expect(tracker.lastRawLocation === good)
+        #expect(tracker.lastRejectionReason == nil)
+    }
+
+    @Test("CLError codes are named")
+    func testDescribeError() {
+        let unknown = CLError(.locationUnknown)
+        #expect(
+            HighFrequencyLocationTracker.describe(unknown)
+                == "kCLError 0: locationUnknown (no fix yet)"
+        )
+        #expect(
+            HighFrequencyLocationTracker.describe(CLError(.denied))
+                == "kCLError 1: denied"
+        )
+    }
+
+    @Test("Accuracies format with units, negatives as invalid")
+    func testFormatAccuracy() {
+        #expect(InternalLocationDebugView.formatAccuracy(5) == "±5.0 m")
+        #expect(
+            InternalLocationDebugView.formatAccuracy(2.5, unit: "°") == "±2.5°"
+        )
+        #expect(
+            InternalLocationDebugView.formatAccuracy(-1) == "invalid (-1)"
+        )
+    }
+}

@@ -20,7 +20,21 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
     @Published var track: Double?  // course in degrees (0-360)
     @Published var isTracking = false
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
-    private var isUpdatingLocation = false
+    @Published var accuracyAuthorization: CLAccuracyAuthorization = .fullAccuracy
+    @Published private(set) var isUpdatingLocation = false
+
+    // Diagnostics for InternalLocationDebugView
+    /// Every fix CoreLocation delivers, including ones dropped as invalid
+    @Published private(set) var lastRawLocation: CLLocation?
+    @Published private(set) var lastRejectionReason: String?
+    @Published private(set) var acceptedFixCount = 0
+    @Published private(set) var rejectedFixCount = 0
+    @Published private(set) var lastError: String?
+    @Published private(set) var lastErrorTime: Date?
+    @Published private(set) var updatesPaused = false
+    @Published private(set) var heading: CLHeading?
+    @Published private(set) var isUpdatingHeading = false
+    @Published private(set) var locationServicesEnabled: Bool?
 
     var appSettings: AppSettings?
     var genericLocation: GenericLocation?
@@ -35,6 +49,59 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = kCLDistanceFilterNone
         authorizationStatus = locationManager.authorizationStatus
+        accuracyAuthorization = locationManager.accuracyAuthorization
+    }
+
+    // Read-only view of the manager's configuration, for diagnostics
+    var desiredAccuracy: CLLocationAccuracy { locationManager.desiredAccuracy }
+    var distanceFilter: CLLocationDistance { locationManager.distanceFilter }
+    var activityType: CLActivityType { locationManager.activityType }
+    var pausesLocationUpdatesAutomatically: Bool {
+        locationManager.pausesLocationUpdatesAutomatically
+    }
+    var headingFilter: CLLocationDegrees { locationManager.headingFilter }
+
+    /// Refresh the system-wide Location Services switch. The class method
+    /// can block, so it's queried off the main thread.
+    func refreshLocationServicesEnabled() {
+        Task {
+            let enabled = await Task.detached {
+                CLLocationManager.locationServicesEnabled()
+            }.value
+            self.locationServicesEnabled = enabled
+        }
+    }
+
+    /// Heading is diagnostics only (the guidance uses GPS track), so it runs
+    /// only while the debug view is on screen.
+    func startHeadingUpdates() {
+        guard CLLocationManager.headingAvailable(), !isUpdatingHeading else {
+            return
+        }
+        isUpdatingHeading = true
+        locationManager.startUpdatingHeading()
+    }
+
+    func stopHeadingUpdates() {
+        guard isUpdatingHeading else { return }
+        isUpdatingHeading = false
+        locationManager.stopUpdatingHeading()
+    }
+
+    /// Why a fix can't be used, or nil if it can. CoreLocation signals an
+    /// invalid coordinate with a negative horizontalAccuracy and an invalid
+    /// altitude with a negative verticalAccuracy.
+    static func rejectionReason(
+        horizontalAccuracy: CLLocationAccuracy,
+        verticalAccuracy: CLLocationAccuracy
+    ) -> String? {
+        if horizontalAccuracy < 0 {
+            return "Invalid coordinate (horizontal accuracy < 0)"
+        }
+        if verticalAccuracy < 0 {
+            return "Invalid altitude (vertical accuracy < 0)"
+        }
+        return nil
     }
 
     func startTracking() {
@@ -100,9 +167,16 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
         // peg the glidepath display at "fly up"). Drop the whole fix rather
         // than feed either one to the guidance; the location then simply
         // goes stale.
-        guard location.horizontalAccuracy >= 0,
-            location.verticalAccuracy >= 0
-        else { return }
+        lastRawLocation = location
+        lastRejectionReason = Self.rejectionReason(
+            horizontalAccuracy: location.horizontalAccuracy,
+            verticalAccuracy: location.verticalAccuracy
+        )
+        guard lastRejectionReason == nil else {
+            rejectedFixCount += 1
+            return
+        }
+        acceptedFixCount += 1
 
         DispatchQueue.main.async {
             self.currentLocation = location.coordinate
@@ -149,12 +223,50 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
         didFailWithError error: Error
     ) {
         print("Location error: \(error.localizedDescription)")
+        lastError = Self.describe(error)
+        lastErrorTime = Date()
+    }
+
+    /// Name the CLError code, since its localizedDescription is just
+    /// "kCLErrorDomain error N"
+    static func describe(_ error: Error) -> String {
+        guard let clError = error as? CLError else {
+            return error.localizedDescription
+        }
+        let name: String
+        switch clError.code {
+        case .locationUnknown: name = "locationUnknown (no fix yet)"
+        case .denied: name = "denied"
+        case .network: name = "network"
+        case .headingFailure: name = "headingFailure"
+        case .promptDeclined: name = "promptDeclined"
+        default: name = "code \(clError.code.rawValue)"
+        }
+        return "kCLError \(clError.code.rawValue): \(name)"
+    }
+
+    func locationManager(
+        _ manager: CLLocationManager,
+        didUpdateHeading newHeading: CLHeading
+    ) {
+        heading = newHeading
+    }
+
+    func locationManagerDidPauseLocationUpdates(_ manager: CLLocationManager) {
+        updatesPaused = true
+    }
+
+    func locationManagerDidResumeLocationUpdates(_ manager: CLLocationManager) {
+        updatesPaused = false
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
+        let accuracy = manager.accuracyAuthorization
         DispatchQueue.main.async {
             self.authorizationStatus = status
+            self.accuracyAuthorization = accuracy
+            self.refreshLocationServicesEnabled()
 
             if status == .authorizedWhenInUse || status == .authorizedAlways {
                 if self.isTracking {
