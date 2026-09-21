@@ -91,10 +91,19 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
     /// Why a fix can't be used, or nil if it can. CoreLocation signals an
     /// invalid coordinate with a negative horizontalAccuracy and an invalid
     /// altitude with a negative verticalAccuracy.
+    ///
+    /// Simulated fixes skip both checks: the Simulator (and Xcode location
+    /// simulation) always reports verticalAccuracy -1 with altitude 0, so
+    /// they would otherwise all be dropped and internal GPS couldn't be
+    /// exercised there at all.
     static func rejectionReason(
         horizontalAccuracy: CLLocationAccuracy,
-        verticalAccuracy: CLLocationAccuracy
+        verticalAccuracy: CLLocationAccuracy,
+        isSimulatedBySoftware: Bool = false
     ) -> String? {
+        if isSimulatedBySoftware {
+            return nil
+        }
         if horizontalAccuracy < 0 {
             return "Invalid coordinate (horizontal accuracy < 0)"
         }
@@ -166,11 +175,13 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
         // verticalAccuracy (the altitude is then typically 0, which would
         // peg the glidepath display at "fly up"). Drop the whole fix rather
         // than feed either one to the guidance; the location then simply
-        // goes stale.
+        // goes stale. Simulated fixes are exempt (see rejectionReason).
         lastRawLocation = location
         lastRejectionReason = Self.rejectionReason(
             horizontalAccuracy: location.horizontalAccuracy,
-            verticalAccuracy: location.verticalAccuracy
+            verticalAccuracy: location.verticalAccuracy,
+            isSimulatedBySoftware: location.sourceInformation?
+                .isSimulatedBySoftware ?? false
         )
         guard lastRejectionReason == nil else {
             rejectedFixCount += 1

@@ -223,6 +223,54 @@ struct InternalGPSDiagnosticsTests {
         #expect(tracker.lastRejectionReason == nil)
     }
 
+    @Test("Simulated fixes skip the accuracy checks")
+    func testSimulatedSkipsChecks() {
+        #expect(
+            HighFrequencyLocationTracker.rejectionReason(
+                horizontalAccuracy: -1,
+                verticalAccuracy: -1,
+                isSimulatedBySoftware: true
+            ) == nil
+        )
+        // A real fix with the same values is still rejected
+        #expect(
+            HighFrequencyLocationTracker.rejectionReason(
+                horizontalAccuracy: -1,
+                verticalAccuracy: -1,
+                isSimulatedBySoftware: false
+            ) != nil
+        )
+    }
+
+    @Test("A simulated fix without altitude reaches the tracker")
+    func testSimulatedFixAccepted() {
+        let tracker = HighFrequencyLocationTracker()
+        // What the Simulator sends for a simctl location
+        let simulated = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 37, longitude: -122),
+            altitude: 0,
+            horizontalAccuracy: 5,
+            verticalAccuracy: -1,
+            course: -1,
+            courseAccuracy: -1,
+            speed: -1,
+            speedAccuracy: -1,
+            timestamp: Date(),
+            sourceInfo: CLLocationSourceInformation(
+                softwareSimulationState: true,
+                andExternalAccessoryState: false
+            )
+        )
+
+        tracker.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [simulated]
+        )
+        #expect(tracker.acceptedFixCount == 1)
+        #expect(tracker.rejectedFixCount == 0)
+        #expect(tracker.lastRejectionReason == nil)
+    }
+
     @Test("CLError codes are named")
     func testDescribeError() {
         let unknown = CLError(.locationUnknown)

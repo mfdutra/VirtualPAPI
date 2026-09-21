@@ -103,6 +103,13 @@ struct InternalLocationDebugView: View {
                         .foregroundColor(.red)
                 } else {
                     row("Guidance", "Accepted", color: .green)
+                    if location.sourceInformation?.isSimulatedBySoftware
+                        == true
+                    {
+                        Text("Simulated fix: accuracy checks skipped")
+                            .font(.footnote)
+                            .foregroundColor(.orange)
+                    }
                 }
 
                 row("Age", Self.formatAge(location.timestamp, now: now))
@@ -310,6 +317,7 @@ struct InternalLocationDebugView: View {
         case .fitness: "Fitness"
         case .otherNavigation: "Other Navigation"
         case .airborne: "Airborne"
+        case .maritime: "Maritime"
         @unknown default: "Unknown (\(activityType.rawValue))"
         }
     }
