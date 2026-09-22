@@ -48,6 +48,14 @@ class HighFrequencyLocationTracker: NSObject, ObservableObject {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = kCLDistanceFilterNone
+        // Aircraft use: .airborne disables the ground-vehicle filtering
+        // (e.g. snapping to roads), and automatic pausing must stay off.
+        // With pausing on, CoreLocation stops delivering fixes once it
+        // decides the device is stationary (a long hold short or run-up)
+        // and doesn't resume them on its own, so the display would go
+        // stale on the take-off roll.
+        locationManager.activityType = .airborne
+        locationManager.pausesLocationUpdatesAutomatically = false
         authorizationStatus = locationManager.authorizationStatus
         accuracyAuthorization = locationManager.accuracyAuthorization
     }

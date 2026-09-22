@@ -39,7 +39,7 @@ struct InternalLocationDebugView: View {
         Section("Status") {
             if settings.locationSource != .internalGPS {
                 Text(
-                    "Internal GPS is not the selected location source. It keeps running, but its fixes don't feed the guidance."
+                    "Internal GPS is not the selected location source, so location updates are stopped and no new fixes will arrive."
                 )
                 .font(.footnote)
                 .foregroundColor(.orange)

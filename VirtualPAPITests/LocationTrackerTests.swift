@@ -271,6 +271,15 @@ struct InternalGPSDiagnosticsTests {
         #expect(tracker.lastRejectionReason == nil)
     }
 
+    @Test("Location manager is configured for aircraft, never auto-pauses")
+    func testManagerConfiguration() {
+        let tracker = HighFrequencyLocationTracker()
+        #expect(tracker.activityType == .airborne)
+        #expect(tracker.pausesLocationUpdatesAutomatically == false)
+        #expect(tracker.desiredAccuracy == kCLLocationAccuracyBest)
+        #expect(tracker.distanceFilter == kCLDistanceFilterNone)
+    }
+
     @Test("CLError codes are named")
     func testDescribeError() {
         let unknown = CLError(.locationUnknown)
