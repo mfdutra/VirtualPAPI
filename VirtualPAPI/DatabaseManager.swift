@@ -8,6 +8,7 @@
 import CryptoKit
 import Foundation
 import SQLite3
+import os
 
 /// Tells SQLite to copy the bound value, so it doesn't have to outlive the
 /// `sqlite3_bind_*` call (SQLITE_STATIC would promise that it does).
@@ -78,7 +79,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
                 ofType: "db"
             )
         else {
-            print("Error: Unable to find aviation.db in bundle")
+            Logger.database.error("Unable to find aviation.db in bundle")
             return
         }
 
@@ -103,7 +104,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
                 {
 
                     if bundleDate > documentsDate {
-                        print(
+                        Logger.database.notice(
                             "Bundle database is newer, updating Documents version..."
                         )
                         try copyDatabaseToDocuments(
@@ -111,11 +112,11 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
                             to: documentsPath
                         )
                     } else {
-                        print("Documents database is up-to-date")
+                        Logger.database.debug("Documents database is up-to-date")
                     }
                 }
             } catch {
-                print("Error comparing database versions: \(error)")
+                Logger.database.error("Error comparing database versions: \(error, privacy: .public)")
                 // If comparison fails, try to copy anyway
                 do {
                     try copyDatabaseToDocuments(
@@ -123,17 +124,17 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
                         to: documentsPath
                     )
                 } catch {
-                    print("Error copying database: \(error)")
+                    Logger.database.error("Error copying database: \(error, privacy: .public)")
                 }
             }
         } else {
             // Database doesn't exist in Documents, copy it
-            print("Copying aviation.db to Documents directory...")
+            Logger.database.notice("Copying aviation.db to Documents directory...")
             do {
                 try copyDatabaseToDocuments(from: bundlePath, to: documentsPath)
-                print("Database copied successfully")
+                Logger.database.notice("Database copied successfully")
             } catch {
-                print("Error copying database to Documents: \(error)")
+                Logger.database.error("Error copying database to Documents: \(error, privacy: .public)")
             }
         }
     }
@@ -162,7 +163,9 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
             return try openReadOnly(atPath: path)
         } catch {
             guard let bundlePath else { throw error }
-            print("Database at \(path) can't be opened (\(error)), restoring bundled copy...")
+            Logger.database.error(
+                "Database at \(path, privacy: .public) can't be opened (\(error, privacy: .public)), restoring bundled copy..."
+            )
             do {
                 try copyDatabase(from: bundlePath, to: path, defaults: defaults)
             } catch {
@@ -310,7 +313,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
     @MainActor  // Secrets is main-actor isolated (default isolation)
     private func getRemoteDatabaseURL() -> URL? {
         guard let totp = generateTOTP(secret: Secrets.totpSecret) else {
-            print("Error: Failed to generate TOTP")
+            Logger.database.error("Failed to generate TOTP")
             return nil
         }
 
@@ -396,7 +399,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
 
         // Check if not modified
         if httpResponse.statusCode == 304 {
-            print("Database is up-to-date")
+            Logger.database.info("Remote database is up-to-date")
             return false
         }
 
@@ -433,7 +436,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         }
         UserDefaults.standard.set(Date(), forKey: Self.lastDownloadKey)
 
-        print("Database updated successfully")
+        Logger.database.notice("Database updated successfully")
         return true
     }
 
@@ -624,13 +627,13 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         do {
             db = try Self.openOrRestore(atPath: dbPath, bundlePath: bundlePath)
             openError = nil
-            print("Database opened successfully at \(dbPath)")
+            Logger.database.info("Database opened successfully at \(dbPath, privacy: .public)")
             return true
         } catch {
             db = nil
             openError = error as? DatabaseError
                 ?? .openFailed(error.localizedDescription)
-            print("Error opening database at \(dbPath): \(error)")
+            Logger.database.error("Error opening database at \(dbPath, privacy: .public): \(error, privacy: .public)")
             return false
         }
     }

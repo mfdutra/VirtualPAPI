@@ -8,6 +8,7 @@
 import Combine
 import CoreLocation
 import Foundation
+import os
 
 class HighFrequencyLocationTracker: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
@@ -241,7 +242,7 @@ extension HighFrequencyLocationTracker: CLLocationManagerDelegate {
         _ manager: CLLocationManager,
         didFailWithError error: Error
     ) {
-        print("Location error: \(error.localizedDescription)")
+        Logger.internalGPS.error("Location error: \(Self.describe(error), privacy: .public)")
         lastError = Self.describe(error)
         lastErrorTime = Date()
     }

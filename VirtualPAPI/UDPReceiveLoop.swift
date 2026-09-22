@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 
 /// A UDP socket bound to a port, with a dedicated thread running a blocking
 /// receive loop.
@@ -45,7 +46,7 @@ nonisolated final class UDPReceiver: @unchecked Sendable {
 
         var wake: [Int32] = [-1, -1]
         guard pipe(&wake) == 0 else {
-            print("\(label): failed to create wake pipe: \(String(cString: strerror(errno)))")
+            Logger.udp.error("\(label, privacy: .public): failed to create wake pipe: \(String(cString: strerror(errno)), privacy: .public)")
             close(fd)
             return nil
         }
@@ -57,7 +58,7 @@ nonisolated final class UDPReceiver: @unchecked Sendable {
     private static func openSocket(port: UInt16, label: String) -> Int32? {
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else {
-            print("\(label): failed to create socket for port \(port): \(String(cString: strerror(errno)))")
+            Logger.udp.error("\(label, privacy: .public): failed to create socket for port \(port): \(String(cString: strerror(errno)), privacy: .public)")
             return nil
         }
 
@@ -86,7 +87,7 @@ nonisolated final class UDPReceiver: @unchecked Sendable {
         }
 
         guard bindResult == 0 else {
-            print("\(label): bind to port \(port) failed: \(String(cString: strerror(errno)))")
+            Logger.udp.error("\(label, privacy: .public): bind to port \(port) failed: \(String(cString: strerror(errno)), privacy: .public)")
             close(fd)
             return nil
         }
@@ -137,7 +138,7 @@ nonisolated final class UDPReceiver: @unchecked Sendable {
             if ready < 0 {
                 let err = errno
                 if err == EINTR || err == EAGAIN { continue }
-                print("\(label): poll on port \(port) failed: \(String(cString: strerror(err)))")
+                Logger.udp.error("\(self.label, privacy: .public): poll on port \(self.port) failed: \(String(cString: strerror(err)), privacy: .public)")
                 return false
             }
 
@@ -148,7 +149,7 @@ nonisolated final class UDPReceiver: @unchecked Sendable {
             guard fds[0].revents & Int16(POLLIN) != 0 else {
                 // Nothing to read and no error: spurious wakeup, poll again.
                 if fds[0].revents == 0 { continue }
-                print("\(label): socket on port \(port) failed: poll revents \(fds[0].revents)")
+                Logger.udp.error("\(self.label, privacy: .public): socket on port \(self.port) failed: poll revents \(fds[0].revents)")
                 return false
             }
 
@@ -161,7 +162,7 @@ nonisolated final class UDPReceiver: @unchecked Sendable {
             } else if bytesRead < 0 {
                 let err = errno
                 if err == EINTR || err == EAGAIN || err == EWOULDBLOCK { continue }
-                print("\(label): recvfrom on port \(port) failed: \(String(cString: strerror(err)))")
+                Logger.udp.error("\(self.label, privacy: .public): recvfrom on port \(self.port) failed: \(String(cString: strerror(err)), privacy: .public)")
                 return false
             }
             // bytesRead == 0: empty datagram, keep listening
@@ -181,7 +182,7 @@ nonisolated final class UDPReceiver: @unchecked Sendable {
             _ = write(wakeWriteFD, &token, 1)
 
             guard threadExited.wait(timeout: .now() + Self.stopTimeout) == .success else {
-                print("\(label): receive thread on port \(port) did not exit; leaking its sockets")
+                Logger.udp.fault("\(self.label, privacy: .public): receive thread on port \(self.port) did not exit; leaking its sockets")
                 return
             }
         }

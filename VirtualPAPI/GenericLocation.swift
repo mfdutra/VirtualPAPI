@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import os
 
 class GenericLocation: ObservableObject {
     @Published var altitude: Double = 0
@@ -273,7 +274,7 @@ class GenericLocation: ObservableObject {
                 * self.smoothedAngleDeviation
         }
 
-        print("Deviation: \(self.angleDeviation) Smoothed: \(self.smoothedAngleDeviation)")
+        Logger.guidance.debug("Deviation: \(self.angleDeviation) Smoothed: \(self.smoothedAngleDeviation)")
     }
 
     // Vertical speed required to fly a straight line from the current

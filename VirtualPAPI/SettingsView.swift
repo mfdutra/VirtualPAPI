@@ -1,5 +1,6 @@
 import Network
 import SwiftUI
+import os
 
 struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings
@@ -238,7 +239,7 @@ struct SettingsView: View {
                 await MainActor.run {
                     updateMessage =
                         "Update failed: \(error.localizedDescription)"
-                    print("Update failed: \(error.localizedDescription)")
+                    Logger.database.error("Update failed: \(error.localizedDescription, privacy: .public)")
                     showError = true
                     isUpdating = false
                 }

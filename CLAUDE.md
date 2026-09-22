@@ -338,6 +338,13 @@ Most views include `#Preview` macros for Xcode canvas previews. When modifying v
 
 Note: Not all views require all environment objects. Check the view's `@EnvironmentObject` declarations to determine which are needed.
 
+### Logging
+- Never use `print`: all diagnostics go through `os.Logger`, via the categories in `VirtualPAPI/Log.swift` (`Logger.guidance`, `.internalGPS`, `.xgps`, `.gdl90`, `.udp`, `.database`; subsystem `com.mfdutra.VirtualPAPI`). The extension is `nonisolated` so the UDP receive threads and the database queue can use it
+- Levels: `.debug` for per-update chatter (e.g. the 1 Hz "Deviation:" line in `updateAngleToDestination()`, essentially free when nothing is capturing), `.info` for routine events, `.notice` for state changes worth keeping (database copied/updated), `.error` for failures, `.fault` for "should never happen" (a UDP receive thread that won't exit)
+- Dynamic strings are redacted in logs read off a device, so interpolate values needed to diagnose a user report (errors, labels, paths) with `privacy: .public`; numbers are public by default
+- Interpolations are autoclosures, so instance properties need an explicit `self.` inside a closure (as in `UDPReceiver`'s receive thread)
+- Read logs from a device with Console.app (filter on the subsystem) or `log stream --predicate 'subsystem == "com.mfdutra.VirtualPAPI"' --level debug`
+
 ### Unit Tests
 Tests use Swift Testing. `.serialized` only orders tests *within* a suite; separate suites still run in parallel, so any state shared across suites is a race. In particular, never construct `AppSettings()` in tests: it reads and writes `UserDefaults.standard`, and a setter in one suite (e.g. `locationSource = .xPlane`) can leak into another suite's "default values" assertions. Use `AppSettings(defaults: .isolatedForTesting())` (a fresh, UUID-named suite), or, in `AppSettingsTests`, the per-test `defaults` store that the suite's `init`/`deinit` create and remove.
 

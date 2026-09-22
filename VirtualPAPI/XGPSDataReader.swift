@@ -1,6 +1,7 @@
 import Combine
 import Darwin
 import Foundation
+import os
 
 @MainActor
 class XGPSDataReader: ObservableObject {
@@ -44,7 +45,7 @@ class XGPSDataReader: ObservableObject {
                 // of silently going quiet.
                 Task { @MainActor [weak self] in
                     guard let self, self.receiver === receiver else { return }
-                    print("XGPS: receive loop exited unexpectedly")
+                    Logger.xgps.error("Receive loop exited unexpectedly")
                     self.stopListening()
                 }
             }

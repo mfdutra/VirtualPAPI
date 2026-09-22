@@ -9,6 +9,7 @@ import Combine
 import Darwin
 import Foundation
 import Network
+import os
 
 // State of the most recent discovery heartbeat broadcast (port 63093).
 // On iOS 14+ broadcasting needs the local network permission and the
@@ -131,7 +132,7 @@ class GDL90Reader: ObservableObject {
                     guard let self,
                         let index = self.receivers.firstIndex(where: { $0 === receiver })
                     else { return }
-                    print("GDL90: receive loop for port \(receiver.port) exited unexpectedly")
+                    Logger.gdl90.error("Receive loop for port \(receiver.port) exited unexpectedly")
                     self.receivers.remove(at: index)
                     receiver.stop()
                     if self.receivers.isEmpty {
@@ -204,7 +205,7 @@ class GDL90Reader: ObservableObject {
                     self.heartbeatStatus = .waiting("\(error)")
                 }
             case .failed(let error):
-                print("Broadcast connection failed: \(error)")
+                Logger.gdl90.error("Broadcast connection failed: \(error, privacy: .public)")
                 Task { @MainActor in
                     self.heartbeatStatus = .failed("\(error)")
                 }
