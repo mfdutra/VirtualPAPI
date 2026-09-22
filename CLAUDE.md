@@ -171,6 +171,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 
 - **AirportSelectionView.swift**: Airport and runway selection interface
   - Search functionality for airports by identifier or name
+  - Typing into the search field while an airport is selected clears the selection (`airportSelection.clear()`, runway list emptied) on the first character, so the search results replace the runway list. Only non-empty text triggers this: `selectAirport` resetting `searchText` to `""` doesn't clear the airport it just set, and `@SceneStorage` restoring the text doesn't fire `.onChange`
   - Displays airport details (elevation, coordinates)
   - Runway selection with visual layout
   - Configurable descent angle (default 3.0°)

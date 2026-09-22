@@ -42,6 +42,14 @@ struct AirportSelectionView: View {
                     .disableAutocorrection(true)
                     .focused($isSearchFieldFocused)
                     .onChange(of: searchText) { _, newValue in
+                        // Typing a new search replaces the current
+                        // selection, so the results are visible
+                        if !newValue.isEmpty
+                            && airportSelection.selectedAirport != nil
+                        {
+                            airportSelection.clear()
+                            availableRunways = []
+                        }
                         performSearch(query: newValue)
                     }
 
