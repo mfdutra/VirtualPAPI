@@ -1992,6 +1992,113 @@ struct DatabaseOpenTests {
 
         expectOpenFailed(url)
     }
+
+    private func bundledDatabasePath() throws -> String {
+        try #require(Bundle.main.path(forResource: "aviation", ofType: "db"))
+    }
+
+    /// Download metadata as a remote update would have left it.
+    private func defaultsWithDownloadMetadata() -> UserDefaults {
+        let defaults = UserDefaults.isolatedForTesting()
+        defaults.set("\"etag\"", forKey: DatabaseManager.etagKey)
+        defaults.set(Date(), forKey: DatabaseManager.lastDownloadKey)
+        return defaults
+    }
+
+    private func expectDownloadMetadataCleared(_ defaults: UserDefaults) {
+        #expect(defaults.object(forKey: DatabaseManager.etagKey) == nil)
+        #expect(defaults.object(forKey: DatabaseManager.lastDownloadKey) == nil)
+    }
+
+    @Test("Valid database is opened as is")
+    func testOpenOrRestoreKeepsValidDatabase() throws {
+        let url = tempURL("valid.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try FileManager.default.copyItem(
+            atPath: bundledDatabasePath(),
+            toPath: url.path
+        )
+        let defaults = defaultsWithDownloadMetadata()
+
+        // A bundle path that would fail proves no restore was attempted
+        let db = try DatabaseManager.openOrRestore(
+            atPath: url.path,
+            bundlePath: tempURL("nonexistent.db").path,
+            defaults: defaults
+        )
+        sqlite3_close_v2(db)
+
+        #expect(defaults.string(forKey: DatabaseManager.etagKey) != nil)
+    }
+
+    @Test("Corrupt database is replaced with the bundled copy")
+    func testOpenOrRestoreReplacesCorruptDatabase() throws {
+        let url = tempURL("corrupt.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("<html><body>Captive portal login</body></html>".utf8)
+            .write(to: url)
+        let defaults = defaultsWithDownloadMetadata()
+
+        let db = try DatabaseManager.openOrRestore(
+            atPath: url.path,
+            bundlePath: bundledDatabasePath(),
+            defaults: defaults
+        )
+        sqlite3_close_v2(db)
+
+        try DatabaseManager.validateDatabase(at: url)
+        expectDownloadMetadataCleared(defaults)
+    }
+
+    @Test("Missing database is restored from the bundled copy")
+    func testOpenOrRestoreRestoresMissingDatabase() throws {
+        let url = tempURL("missing.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let db = try DatabaseManager.openOrRestore(
+            atPath: url.path,
+            bundlePath: bundledDatabasePath(),
+            defaults: .isolatedForTesting()
+        )
+        sqlite3_close_v2(db)
+
+        try DatabaseManager.validateDatabase(at: url)
+    }
+
+    @Test("Failed restore is reported")
+    func testOpenOrRestoreReportsFailedRestore() throws {
+        let url = tempURL("corrupt.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data().write(to: url)
+
+        #expect {
+            try DatabaseManager.openOrRestore(
+                atPath: url.path,
+                bundlePath: tempURL("nonexistent.db").path,
+                defaults: .isolatedForTesting()
+            )
+        } throws: { error in
+            guard case DatabaseManager.DatabaseError.openFailed(let reason) =
+                error
+            else { return false }
+            return reason.contains("restoring the bundled database failed")
+        }
+    }
+
+    @Test("Without a bundle path, a failed open is not retried")
+    func testOpenOrRestoreWithoutBundlePath() {
+        let url = tempURL("missing.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(throws: DatabaseManager.DatabaseError.self) {
+            try DatabaseManager.openOrRestore(
+                atPath: url.path,
+                bundlePath: nil,
+                defaults: .isolatedForTesting()
+            )
+        }
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
 }
 
 // MARK: - Database Row Decoding Tests

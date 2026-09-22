@@ -46,8 +46,8 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
     /// UserDefaults keys describing the last remote download. They only hold
     /// while the Documents database is that download, so they're cleared
     /// whenever the bundled copy replaces it.
-    private static let etagKey = "aviation_db_etag"
-    private static let lastDownloadKey = "last_database_download"
+    static let etagKey = "aviation_db_etag"
+    static let lastDownloadKey = "last_database_download"
 
     // Only accessed on `queue`
     private var db: OpaquePointer?
@@ -59,7 +59,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
     private init() {
         queue.sync {
             ensureDatabaseIsUpToDate()
-            openDatabase()
+            openDatabase(restoringFrom: Self.bundledDatabasePath)
         }
     }
 
@@ -138,6 +138,43 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         }
     }
 
+    /// Path of the database shipped in the app bundle, if present.
+    private static var bundledDatabasePath: String? {
+        Bundle.main.path(forResource: "aviation", ofType: "db")
+    }
+
+    /// Opens the database at `path` read-only; if that fails and
+    /// `bundlePath` is given, replaces it with the bundled copy and retries
+    /// once.
+    ///
+    /// `ensureDatabaseIsUpToDate()` only compares modification dates, so a
+    /// corrupt or truncated Documents database that is newer than the bundle
+    /// would otherwise stay broken until a remote update succeeds, which
+    /// needs a network connection. The broken file is discarded (it couldn't
+    /// be used anyway) in favour of the bundled data, clearing the download
+    /// metadata in `defaults` like any other bundle copy.
+    static func openOrRestore(
+        atPath path: String,
+        bundlePath: String?,
+        defaults: UserDefaults = .standard
+    ) throws -> OpaquePointer {
+        do {
+            return try openReadOnly(atPath: path)
+        } catch {
+            guard let bundlePath else { throw error }
+            print("Database at \(path) can't be opened (\(error)), restoring bundled copy...")
+            do {
+                try copyDatabase(from: bundlePath, to: path, defaults: defaults)
+            } catch {
+                throw DatabaseError.openFailed(
+                    "restoring the bundled database failed: "
+                        + error.localizedDescription
+                )
+            }
+            return try openReadOnly(atPath: path)
+        }
+    }
+
     /// Get the path to the database in the Documents directory
     private func getDocumentsDatabasePath() -> String {
         let paths = FileManager.default.urls(
@@ -153,6 +190,16 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         from sourcePath: String,
         to destinationPath: String
     ) throws {
+        try Self.copyDatabase(from: sourcePath, to: destinationPath)
+    }
+
+    /// Copies the database at `sourcePath` over `destinationPath` and clears
+    /// the remote download metadata in `defaults`.
+    private static func copyDatabase(
+        from sourcePath: String,
+        to destinationPath: String,
+        defaults: UserDefaults = .standard
+    ) throws {
         let fileManager = FileManager.default
 
         // Remove existing database if present
@@ -167,8 +214,8 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         // download: forget that download's ETag (otherwise the next update
         // check sends If-None-Match, gets a 304 and wrongly reports
         // "up-to-date") and its timestamp
-        UserDefaults.standard.removeObject(forKey: Self.etagKey)
-        UserDefaults.standard.removeObject(forKey: Self.lastDownloadKey)
+        defaults.removeObject(forKey: etagKey)
+        defaults.removeObject(forKey: lastDownloadKey)
     }
 
     // MARK: - Remote Database Download
@@ -566,14 +613,16 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
     }
 
     @discardableResult
-    private func openDatabase() -> Bool {
+    private func openDatabase(restoringFrom bundlePath: String? = nil)
+        -> Bool
+    {
         dispatchPrecondition(condition: .onQueue(queue))
 
         // Open database from Documents directory
         let dbPath = getDocumentsDatabasePath()
 
         do {
-            db = try Self.openReadOnly(atPath: dbPath)
+            db = try Self.openOrRestore(atPath: dbPath, bundlePath: bundlePath)
             openError = nil
             print("Database opened successfully at \(dbPath)")
             return true
