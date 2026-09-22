@@ -1470,6 +1470,74 @@ struct GDL90AltitudeSelectionTests {
     }
 }
 
+// MARK: - Pressure Altitude Caution Tests
+
+@Suite("Pressure Altitude Caution Tests")
+@MainActor
+struct PressureAltitudeCautionTests {
+
+    @Test("Caution only for fresh GDL90 data on pressure altitude")
+    func testIsUsingPressureAltitude() {
+        #expect(
+            ContentView.isUsingPressureAltitude(
+                locationSource: .gdl90,
+                locationIsStale: false,
+                usingGeometricAltitude: false
+            )
+        )
+        #expect(
+            !ContentView.isUsingPressureAltitude(
+                locationSource: .gdl90,
+                locationIsStale: false,
+                usingGeometricAltitude: true
+            )
+        )
+        #expect(
+            !ContentView.isUsingPressureAltitude(
+                locationSource: .gdl90,
+                locationIsStale: true,
+                usingGeometricAltitude: false
+            )
+        )
+        // Internal GPS and X-Plane are always MSL
+        for source in [LocationSource.internalGPS, .xPlane] {
+            #expect(
+                !ContentView.isUsingPressureAltitude(
+                    locationSource: source,
+                    locationIsStale: false,
+                    usingGeometricAltitude: false
+                )
+            )
+        }
+    }
+
+    @Test("Diamond is amber on pressure altitude, magenta otherwise")
+    func testDiamondColor() {
+        #expect(
+            ContentView.diamondColor(
+                locationIsStale: false,
+                usingPressureAltitude: true
+            ) == ContentView.uncertainAltitudeColor
+        )
+        #expect(
+            ContentView.diamondColor(
+                locationIsStale: false,
+                usingPressureAltitude: false
+            ) == ContentView.normalLocationColor
+        )
+    }
+
+    @Test("Stale location color wins over the pressure altitude color")
+    func testStaleWins() {
+        #expect(
+            ContentView.diamondColor(
+                locationIsStale: true,
+                usingPressureAltitude: true
+            ) == ContentView.staleLocationColor
+        )
+    }
+}
+
 // MARK: - AppSettings Tests
 
 @Suite("AppSettings Tests")

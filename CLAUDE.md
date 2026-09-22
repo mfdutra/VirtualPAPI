@@ -153,6 +153,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
   - Navigation to AirportSelectionView and SettingsView
   - Location staleness warning when GPS signal is lost
   - Pressure altitude caution under the DTG line: orange "⚠ PRESS ALT", shown only when GDL90 is the active source, location isn't stale, and it has fallen back to pressure altitude (nothing is shown when using geometric altitude; internal GPS and X-Plane are always MSL)
+  - In that same state the glide slope diamond turns amber (`ContentView.uncertainAltitudeColor`, orange) instead of magenta, so the caution is on the indicator itself, not only in the caption. Both are driven by the pure `static func ContentView.isUsingPressureAltitude(locationSource:locationIsStale:usingGeometricAltitude:)`; the diamond color comes from `static func diamondColor(locationIsStale:usingPressureAltitude:)` (stale yellow wins, then amber, else magenta). The DTG/V/B/V/S header numbers keep the normal magenta/stale colors. Covered by the "Pressure Altitude Caution Tests" suite
   - Uncertain GPS altitude caution under the DTG line: orange "⚠ GPS ALT ±NN ft" (`static func ContentView.formatVerticalAccuracy(_:)`, metres converted to feet and rounded to 10), shown only when internal GPS is the active source, location isn't stale, and `HighFrequencyLocationTracker.verticalAccuracyIsPoor`. Guidance keeps working; the pilot is just told the altitude behind it is uncertain
   - Debug info display (lat/lon/alt/speed/track/source) when enabled
 

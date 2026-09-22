@@ -67,10 +67,7 @@ struct ContentView: View {
 
                         // Internal GPS and X-Plane are always MSL; GDL90 may
                         // fall back to pressure altitude
-                        if appSettings.locationSource == .gdl90,
-                            !genericLocation.locationIsStale,
-                            !gdl90Reader.usingGeometricAltitude
-                        {
+                        if usingPressureAltitude {
                             Label(
                                 "PRESS ALT",
                                 systemImage: "exclamationmark.triangle.fill"
@@ -100,7 +97,13 @@ struct ContentView: View {
                     Group {
                         switch appSettings.visualization {
                         case .glideSlope:
-                            GlideSlopeView(locationColor: getLocationColor())
+                            GlideSlopeView(
+                                locationColor: ContentView.diamondColor(
+                                    locationIsStale: genericLocation
+                                        .locationIsStale,
+                                    usingPressureAltitude: usingPressureAltitude
+                                )
+                            )
                         case .papi:
                             PapiView()
                         }
@@ -249,13 +252,47 @@ struct ContentView: View {
         return String(format: "GPS ALT \u{00B1}%.0f ft", feet)
     }
 
+    static let normalLocationColor = Color(red: 1, green: 0, blue: 1)
+    static let staleLocationColor = Color(red: 0.8, green: 0.8, blue: 0)
+    static let uncertainAltitudeColor = Color.orange
+
+    // True when GDL90 is feeding pressure altitude (29.92 inHg), which can be
+    // hundreds of feet off MSL on a non-standard day
+    static func isUsingPressureAltitude(
+        locationSource: LocationSource,
+        locationIsStale: Bool,
+        usingGeometricAltitude: Bool
+    ) -> Bool {
+        locationSource == .gdl90 && !locationIsStale && !usingGeometricAltitude
+    }
+
+    // The diamond turns amber on pressure altitude, so the pilot sees the
+    // caution on the indicator itself, not only in the header caption
+    static func diamondColor(
+        locationIsStale: Bool,
+        usingPressureAltitude: Bool
+    ) -> Color {
+        if locationIsStale {
+            return staleLocationColor
+        } else if usingPressureAltitude {
+            return uncertainAltitudeColor
+        } else {
+            return normalLocationColor
+        }
+    }
+
+    private var usingPressureAltitude: Bool {
+        ContentView.isUsingPressureAltitude(
+            locationSource: appSettings.locationSource,
+            locationIsStale: genericLocation.locationIsStale,
+            usingGeometricAltitude: gdl90Reader.usingGeometricAltitude
+        )
+    }
+
     // If location data is lost, purple things become yellow
     private func getLocationColor() -> Color {
-        if genericLocation.locationIsStale {
-            return Color(red: 0.8, green: 0.8, blue: 0)
-        } else {
-            return Color(red: 1, green: 0, blue: 1)
-        }
+        genericLocation.locationIsStale
+            ? ContentView.staleLocationColor : ContentView.normalLocationColor
     }
 
 }
