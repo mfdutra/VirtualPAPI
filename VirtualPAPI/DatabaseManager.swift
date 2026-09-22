@@ -52,6 +52,10 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
     // Only accessed on `queue`
     private var db: OpaquePointer?
 
+    /// Why the live database couldn't be opened, or nil when it's open.
+    /// Only accessed on `queue`.
+    private var openError: DatabaseError?
+
     private init() {
         queue.sync {
             ensureDatabaseIsUpToDate()
@@ -485,6 +489,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         case tooLarge(Int64)
         case invalidDatabase(String)
         case installFailed(String)
+        case openFailed(String)
 
         var errorDescription: String? {
             switch self {
@@ -504,6 +509,8 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
                 return "Downloaded database is invalid: \(reason)"
             case .installFailed(let reason):
                 return "Could not install the new database: \(reason)"
+            case .openFailed(let reason):
+                return "Could not open the aviation database: \(reason)"
             }
         }
     }
@@ -565,13 +572,54 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         // Open database from Documents directory
         let dbPath = getDocumentsDatabasePath()
 
-        if sqlite3_open(dbPath, &db) != SQLITE_OK {
-            print("Error opening database at \(dbPath)")
+        do {
+            db = try Self.openReadOnly(atPath: dbPath)
+            openError = nil
+            print("Database opened successfully at \(dbPath)")
+            return true
+        } catch {
+            db = nil
+            openError = error as? DatabaseError
+                ?? .openFailed(error.localizedDescription)
+            print("Error opening database at \(dbPath): \(error)")
             return false
         }
+    }
 
-        print("Database opened successfully at \(dbPath)")
-        return true
+    /// Opens the database at `path` read-only and checks it has an
+    /// `airports` table, so a missing, empty or non-SQLite file fails here
+    /// rather than at the first query.
+    ///
+    /// The app never writes to the database. Read-only matters: with
+    /// `sqlite3_open` (READWRITE | CREATE) a missing file would be silently
+    /// created empty, and being newer than the bundle it would never be
+    /// replaced on later launches.
+    static func openReadOnly(atPath path: String) throws -> OpaquePointer {
+        var handle: OpaquePointer?
+        let result = sqlite3_open_v2(path, &handle, SQLITE_OPEN_READONLY, nil)
+        guard result == SQLITE_OK, let handle else {
+            // A handle is usually allocated even on failure
+            let reason = handle.map { String(cString: sqlite3_errmsg($0)) }
+                ?? String(cString: sqlite3_errstr(result))
+            sqlite3_close_v2(handle)
+            throw DatabaseError.openFailed(reason)
+        }
+
+        // Opening is lazy; compiling a query forces SQLite to read the file
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard
+            sqlite3_prepare_v2(
+                handle, "SELECT ident FROM airports LIMIT 0", -1, &statement,
+                nil
+            ) == SQLITE_OK
+        else {
+            let reason = String(cString: sqlite3_errmsg(handle))
+            // close_v2 defers the close until the deferred finalize
+            sqlite3_close_v2(handle)
+            throw DatabaseError.openFailed(reason)
+        }
+        return handle
     }
 
     private func closeDatabase() {
@@ -605,6 +653,12 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
     // Get row counts for airports and runways tables
     func getTableRowCounts() -> (airports: Int, runways: Int) {
         queue.sync { fetchTableRowCounts() }
+    }
+
+    /// Why the live database couldn't be opened, or nil when it's open.
+    /// Every query returns nothing while this is set.
+    var openFailure: DatabaseError? {
+        queue.sync { openError }
     }
 
     // MARK: - Row decoding

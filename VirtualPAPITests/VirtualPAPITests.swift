@@ -1935,6 +1935,65 @@ struct DatabaseValidationTests {
     }
 }
 
+// MARK: - Database Open Tests
+
+@Suite("Database Open Tests")
+struct DatabaseOpenTests {
+
+    private func tempURL(_ name: String) -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(
+            "\(UUID().uuidString)-\(name)"
+        )
+    }
+
+    private func expectOpenFailed(_ url: URL) {
+        #expect {
+            try DatabaseManager.openReadOnly(atPath: url.path)
+        } throws: { error in
+            guard case DatabaseManager.DatabaseError.openFailed = error
+            else { return false }
+            return true
+        }
+    }
+
+    @Test("Bundled database opens")
+    func testBundledDatabaseOpens() throws {
+        let url = try #require(
+            Bundle.main.url(forResource: "aviation", withExtension: "db")
+        )
+        let db = try DatabaseManager.openReadOnly(atPath: url.path)
+        sqlite3_close_v2(db)
+    }
+
+    @Test("Missing file fails and is not created")
+    func testMissingFileNotCreated() {
+        let url = tempURL("missing.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        expectOpenFailed(url)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @Test("Empty file fails")
+    func testEmptyFileFails() throws {
+        let url = tempURL("empty.db")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data().write(to: url)
+
+        expectOpenFailed(url)
+    }
+
+    @Test("Non-SQLite file fails")
+    func testNonSQLiteFileFails() throws {
+        let url = tempURL("portal.html")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("<html><body>Captive portal login</body></html>".utf8)
+            .write(to: url)
+
+        expectOpenFailed(url)
+    }
+}
+
 // MARK: - Database Row Decoding Tests
 
 /// The query methods always read the app's own database in Documents and

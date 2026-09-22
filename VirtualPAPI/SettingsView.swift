@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State var ipAddress: String = ""
     @State private var databaseModifiedDate: Date?
     @State private var tableCounts: (airports: Int, runways: Int)?
+    @State private var databaseOpenError: String?
     @State private var isUpdating = false
     @State private var updateMessage: String?
     @State private var showError = false
@@ -69,7 +70,10 @@ struct SettingsView: View {
                 HStack {
                     Text("Airports")
                     Spacer()
-                    if let counts = tableCounts {
+                    if databaseOpenError != nil {
+                        Text("Unavailable")
+                            .foregroundColor(.red)
+                    } else if let counts = tableCounts {
                         Text("\(counts.airports)")
                             .foregroundColor(.secondary)
                             .monospaced()
@@ -90,6 +94,12 @@ struct SettingsView: View {
                         Text("—")
                             .foregroundColor(.secondary)
                     }
+                }
+
+                if let error = databaseOpenError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
                 }
 
                 Button(action: {
@@ -182,6 +192,8 @@ struct SettingsView: View {
 
     private func loadTableCounts() {
         tableCounts = DatabaseManager.shared.getTableRowCounts()
+        databaseOpenError =
+            DatabaseManager.shared.openFailure?.localizedDescription
     }
 
     private func getDatabasePath() -> String {
