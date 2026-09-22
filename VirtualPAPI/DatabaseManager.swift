@@ -43,6 +43,12 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
 
     private let queue = DispatchQueue(label: "database-manager-queue")
 
+    /// UserDefaults keys describing the last remote download. They only hold
+    /// while the Documents database is that download, so they're cleared
+    /// whenever the bundled copy replaces it.
+    private static let etagKey = "aviation_db_etag"
+    private static let lastDownloadKey = "last_database_download"
+
     // Only accessed on `queue`
     private var db: OpaquePointer?
 
@@ -152,6 +158,13 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
 
         // Copy the database
         try fileManager.copyItem(atPath: sourcePath, toPath: destinationPath)
+
+        // The Documents database is now the bundled one, not the last remote
+        // download: forget that download's ETag (otherwise the next update
+        // check sends If-None-Match, gets a 304 and wrongly reports
+        // "up-to-date") and its timestamp
+        UserDefaults.standard.removeObject(forKey: Self.etagKey)
+        UserDefaults.standard.removeObject(forKey: Self.lastDownloadKey)
     }
 
     // MARK: - Remote Database Download
@@ -298,8 +311,7 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
         request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
 
         // Add ETag if we have one from previous download
-        let etagKey = "aviation_db_etag"
-        if let storedETag = UserDefaults.standard.string(forKey: etagKey) {
+        if let storedETag = UserDefaults.standard.string(forKey: Self.etagKey) {
             request.setValue(storedETag, forHTTPHeaderField: "If-None-Match")
         }
 
@@ -366,9 +378,9 @@ nonisolated final class DatabaseManager: @unchecked Sendable {
 
         // Only now record the ETag and download timestamp
         if let newETag = httpResponse.value(forHTTPHeaderField: "ETag") {
-            UserDefaults.standard.set(newETag, forKey: etagKey)
+            UserDefaults.standard.set(newETag, forKey: Self.etagKey)
         }
-        UserDefaults.standard.set(Date(), forKey: "last_database_download")
+        UserDefaults.standard.set(Date(), forKey: Self.lastDownloadKey)
 
         print("Database updated successfully")
         return true
