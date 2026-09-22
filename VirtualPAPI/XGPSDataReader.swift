@@ -66,7 +66,7 @@ class XGPSDataReader: ObservableObject {
         _ speed: Double,
         _ track: Double
     ) {
-        if appSettings!.locationSource == .xPlane {
+        if appSettings?.locationSource == .xPlane {
             self.genericLocation?.updateLocation(
                 latitude: latitude,
                 longitude: longitude,

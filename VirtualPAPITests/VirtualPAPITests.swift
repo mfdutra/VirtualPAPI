@@ -339,6 +339,21 @@ struct XGPSDataReaderTests {
         #expect(genericLocation.longitude == -122.4194)
     }
 
+    @Test("Packet processed before settings are wired doesn't crash or feed GenericLocation")
+    func testPacketWithoutAppSettings() {
+        let reader = XGPSDataReader()
+        let genericLocation = GenericLocation()
+        reader.genericLocation = genericLocation
+
+        let packetData = "XGPS,-122.4194,37.7749,305.0,0,0,0,0,0,0,0".data(using: .ascii)!
+        reader.processXGPSData(packetData)
+
+        // The reader's own state updates; GenericLocation doesn't, since no
+        // source is known to be selected
+        #expect(reader.latitude == 37.7749)
+        #expect(genericLocation.latitude != 37.7749)
+    }
+
     @Test("Parse XGPS packet with zero altitude")
     func testParseXGPSPacketZeroAltitude() {
         let reader = XGPSDataReader()
