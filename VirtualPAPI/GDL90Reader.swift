@@ -30,6 +30,24 @@ enum HeartbeatStatus: Equatable {
     }
 }
 
+// Track/heading type from the low two bits of the ownship report's "misc"
+// field (message 10, byte 12 low nibble)
+enum GDL90TrackType: UInt8 {
+    case notValid = 0
+    case trueTrack = 1
+    case magneticHeading = 2
+    case trueHeading = 3
+
+    var description: String {
+        switch self {
+        case .notValid: return "Not valid"
+        case .trueTrack: return "True track"
+        case .magneticHeading: return "Magnetic heading"
+        case .trueHeading: return "True heading"
+        }
+    }
+}
+
 @MainActor
 class GDL90Reader: ObservableObject {
     @Published var latitude: Double = 0.0
@@ -42,7 +60,14 @@ class GDL90Reader: ObservableObject {
     // false when falling back to pressure altitude (message 10)
     @Published var usingGeometricAltitude: Bool = false
     @Published var groundSpeed: Double = 0.0
-    @Published var track: Double = 0.0
+    @Published var track: Double = 0.0  // raw byte 17, whatever its type
+    @Published var trackType: GDL90TrackType = .notValid
+    // Navigation Integrity Category (message 10, byte 13 upper nibble);
+    // 0 means unknown/no valid position
+    @Published var nic: UInt8 = 0
+    // "GPS Pos Valid" from the device's heartbeat (message 0, byte 1 bit 7),
+    // nil until a heartbeat arrives
+    @Published var deviceGPSValid: Bool? = nil
     @Published var isConnected: Bool = false
     @Published var lastUpdateTime: Date = Date()
     @Published var heartbeatStatus: HeartbeatStatus = .idle
@@ -54,6 +79,11 @@ class GDL90Reader: ObservableObject {
     // a 3 second window tolerates a couple of dropped packets before falling
     // back to pressure altitude
     static let geometricAltitudeMaxAge: TimeInterval = 3.0
+
+    // Reports below this NIC are not used for guidance. Per the spec a
+    // device without a fix sends lat/lon 0 with NIC 0, which would otherwise
+    // pass as a fresh position at Null Island
+    static let minimumNIC: UInt8 = 1
 
     private var receivers: [UDPReceiver] = []
     private var broadcastTimer: Timer?
@@ -121,6 +151,7 @@ class GDL90Reader: ObservableObject {
         receivers = []
         isConnected = false
         heartbeatStatus = .idle
+        deviceGPSValid = nil
     }
 
     private func startBroadcastHeartbeat() {
@@ -217,6 +248,8 @@ class GDL90Reader: ObservableObject {
             let messageID = message[0]
 
             switch messageID {
+            case 0:  // Heartbeat
+                parseHeartbeat(message)
             case 10:  // Ownship Report
                 parseOwnshipReport(message)
             case 11:  // Ownship Geometric Altitude
@@ -363,6 +396,12 @@ class GDL90Reader: ObservableObject {
             (UInt16(message[14]) << 4) | ((UInt16(message[15]) & 0xF0) >> 4)
         let speed: Double? = velocityRaw == 0xFFF ? nil : Double(velocityRaw)
 
+        // Byte 12 low nibble: misc; its two low bits are the track type
+        let trackType = GDL90Reader.decodeTrackType(message[12])
+
+        // Byte 13 upper nibble: NIC
+        let nic = message[13] >> 4
+
         // Byte 17: Track/heading (8-bit value, LSB = 360/256 = 1.40625 degrees)
         let trackRaw = message[17]
         let track: Double = Double(trackRaw) * (360.0 / 256.0)
@@ -372,7 +411,13 @@ class GDL90Reader: ObservableObject {
         self.altitude = altitude
         self.groundSpeed = speed ?? 0
         self.track = track
+        self.trackType = trackType
+        self.nic = nic
         self.lastUpdateTime = Date()
+
+        // No valid position (e.g. no GPS fix): publish the report for the
+        // debug view, but let GenericLocation go stale
+        guard nic >= GDL90Reader.minimumNIC else { return }
 
         // With no usable altitude, don't feed a position to GenericLocation;
         // it goes stale rather than computing a glidepath from garbage
@@ -391,8 +436,27 @@ class GDL90Reader: ObservableObject {
             longitude,
             selected.altitude,
             speed,
-            track
+            GDL90Reader.guidanceTrack(track, type: trackType)
         )
+    }
+
+    static func decodeTrackType(_ miscByte: UInt8) -> GDL90TrackType {
+        // Two bits can only hold 0...3, all of which are cases
+        GDL90TrackType(rawValue: miscByte & 0x03) ?? .notValid
+    }
+
+    // Relative bearing is computed against true bearings, so only a true
+    // track is usable. Magnetic heading would be off by the local variation,
+    // and a heading (true or magnetic) ignores wind drift; with nil the
+    // bearing arrow disappears, as it does for an invalid internal GPS course
+    static func guidanceTrack(_ track: Double, type: GDL90TrackType) -> Double? {
+        type == .trueTrack ? track : nil
+    }
+
+    // Parse Message ID 0: Heartbeat. Byte 1 bit 7 is "GPS Pos Valid"
+    private func parseHeartbeat(_ message: [UInt8]) {
+        guard message.count >= 7 else { return }
+        deviceGPSValid = (message[1] & 0x80) != 0
     }
 
     // The glidepath is computed against MSL runway elevations, so prefer

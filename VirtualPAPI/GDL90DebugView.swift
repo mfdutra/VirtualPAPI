@@ -59,6 +59,20 @@ struct GDL90DebugView: View {
                 }
             }
 
+            Section("Device Heartbeat (Message 0)") {
+                HStack {
+                    Text("GPS Position")
+                    Spacer()
+                    Text(
+                        gdl90Reader.deviceGPSValid.map { $0 ? "Valid" : "Not valid" }
+                            ?? "No heartbeat"
+                    )
+                    .foregroundColor(
+                        gdl90Reader.deviceGPSValid.map { $0 ? .green : .red } ?? .secondary
+                    )
+                }
+            }
+
             Section("Position (Message 10)") {
                 HStack {
                     Text("Latitude")
@@ -94,11 +108,31 @@ struct GDL90DebugView: View {
                         .monospaced()
                 }
                 HStack {
-                    Text("Heading")
+                    Text("NIC")
+                    Spacer()
+                    Text(
+                        gdl90Reader.nic >= GDL90Reader.minimumNIC
+                            ? "\(gdl90Reader.nic)" : "\(gdl90Reader.nic) (no valid position)"
+                    )
+                    .foregroundColor(
+                        gdl90Reader.nic >= GDL90Reader.minimumNIC ? .secondary : .red
+                    )
+                    .monospaced()
+                }
+                HStack {
+                    Text(gdl90Reader.trackType == .trueTrack ? "Track" : "Track/Heading")
                     Spacer()
                     Text("\(gdl90Reader.track, specifier: "%.0f")°")
                         .foregroundColor(.secondary)
                         .monospaced()
+                }
+                HStack {
+                    Text("Track Type")
+                    Spacer()
+                    Text(gdl90Reader.trackType.description)
+                        .foregroundColor(
+                            gdl90Reader.trackType == .trueTrack ? .secondary : .orange
+                        )
                 }
             }
 

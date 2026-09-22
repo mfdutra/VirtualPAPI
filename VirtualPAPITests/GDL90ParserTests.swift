@@ -64,11 +64,13 @@ enum GDL90TestFrame {
         altRaw: UInt16 = 250,  // 250 * 25 - 1000 = 5250 ft
         velocityRaw: UInt16 = 120,  // 120 kt
         trackRaw: UInt8 = 0x40,  // 64 * 360/256 = 90 degrees
+        trackType: UInt8 = 1,  // true track
+        nic: UInt8 = 0x0B,
         address: [UInt8] = [0xAB, 0xCD, 0xEF],
         callSign: [UInt8] = Array("N123AB  ".utf8)
     ) -> [UInt8] {
         let byte11 = UInt8((altRaw >> 4) & 0xFF)
-        let byte12 = UInt8((altRaw & 0x0F) << 4) | 0x09  // misc: airborne, true track
+        let byte12 = UInt8((altRaw & 0x0F) << 4) | 0x08 | (trackType & 0x03)  // misc: airborne + track type
         let byte14 = UInt8((velocityRaw >> 4) & 0xFF)
         // low nibble of byte 15 is the top of the vertical velocity field
         let byte15 = UInt8((velocityRaw & 0x0F) << 4) | 0x08
@@ -77,12 +79,18 @@ enum GDL90TestFrame {
             + be24(latRaw)  // bytes 5-7
             + be24(lonRaw)  // bytes 8-10
             + [byte11, byte12]  // bytes 11-12: altitude + misc
-            + [0xBB]  // byte 13: NIC/NACp
+            + [(nic << 4) | 0x0B]  // byte 13: NIC/NACp
             + [byte14, byte15, 0x00]  // bytes 14-16: horizontal + vertical velocity
             + [trackRaw]  // byte 17
             + [0x01]  // byte 18: emitter category
             + callSign  // bytes 19-26
             + [0x00]  // byte 27: emergency code
+    }
+
+    /// Message ID 0 (Heartbeat), 7 bytes. Byte 1 bit 7 is "GPS Pos Valid";
+    /// bit 0 (UAT initialized) is set as a real device would.
+    static func heartbeat(gpsValid: Bool) -> [UInt8] {
+        [0x00, gpsValid ? 0x81 : 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]
     }
 
     /// Message ID 11 (Ownship Geometric Altitude), 5 bytes.
@@ -307,6 +315,79 @@ struct GDL90ParserTests {
         expectUnchanged(location)
     }
 
+    // MARK: Validity indicators
+
+    @Test("NIC 0 (no fix, lat/lon 0) is published but not used for guidance")
+    func testNICZeroRejected() {
+        let (reader, location) = makeReader()
+        seed(location)
+
+        reader.processGDL90Data(
+            GDL90TestFrame.frame(
+                GDL90TestFrame.ownship(latRaw: 0, lonRaw: 0, nic: 0)))
+
+        #expect(reader.nic == 0)
+        expectUnchanged(location)  // not sent to Null Island
+    }
+
+    @Test("NIC is decoded from the upper nibble of byte 13")
+    func testNICDecoded() {
+        let (reader, location) = makeReader()
+
+        reader.processGDL90Data(
+            GDL90TestFrame.frame(
+                GDL90TestFrame.ownship(latRaw: 0x1B0000, lonRaw: 0xA80000, nic: 1)))
+
+        #expect(reader.nic == 1)
+        #expect(location.latitude == 37.96875)
+    }
+
+    @Test(
+        "Only a true track reaches GenericLocation",
+        arguments: [
+            (UInt8(0), GDL90TrackType.notValid, false),
+            (UInt8(1), GDL90TrackType.trueTrack, true),
+            (UInt8(2), GDL90TrackType.magneticHeading, false),
+            (UInt8(3), GDL90TrackType.trueHeading, false),
+        ])
+    func testTrackType(raw: UInt8, type: GDL90TrackType, usable: Bool) {
+        let (reader, location) = makeReader()
+        seed(location)
+
+        reader.processGDL90Data(
+            GDL90TestFrame.frame(
+                GDL90TestFrame.ownship(latRaw: 0x1B0000, lonRaw: 0xA80000, trackType: raw)))
+
+        #expect(reader.trackType == type)
+        #expect(reader.track == 90.0)  // raw value always published for debugging
+        #expect(location.latitude == 37.96875)  // position still used
+        #expect(location.track == (usable ? 90.0 : nil))
+    }
+
+    @Test("Heartbeat GPS position valid bit is decoded")
+    func testHeartbeatGPSValid() {
+        let (reader, location) = makeReader()
+        seed(location)
+        #expect(reader.deviceGPSValid == nil)
+
+        reader.processGDL90Data(GDL90TestFrame.frame(GDL90TestFrame.heartbeat(gpsValid: true)))
+        #expect(reader.deviceGPSValid == true)
+
+        reader.processGDL90Data(GDL90TestFrame.frame(GDL90TestFrame.heartbeat(gpsValid: false)))
+        #expect(reader.deviceGPSValid == false)
+
+        // Status only: a heartbeat never touches the guidance location
+        expectUnchanged(location)
+    }
+
+    @Test("Spec heartbeat example decodes as GPS position valid")
+    func testSpecHeartbeat() {
+        let (reader, _) = makeReader()
+        reader.processGDL90Data(
+            GDL90TestFrame.frame([0x00, 0x81, 0x41, 0xDB, 0xD0, 0x08, 0x02]))
+        #expect(reader.deviceGPSValid == true)
+    }
+
     // MARK: Geometric altitude (message 11)
 
     @Test("Message 11 decodes a positive geometric altitude")
@@ -443,7 +524,7 @@ struct GDL90ParserTests {
         let (reader, location) = makeReader()
         seed(location)
 
-        reader.processGDL90Data(GDL90TestFrame.frame([0x00, 0x81, 0x41, 0xDB]))
+        reader.processGDL90Data(GDL90TestFrame.frame([0x65, 0x00, 0x01, 0x02, 0x03]))
         reader.processGDL90Data(GDL90TestFrame.frame([20, 0x01, 0x02, 0x03, 0x04]))
 
         #expect(reader.latitude == 0)

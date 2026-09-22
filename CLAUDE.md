@@ -196,6 +196,7 @@ The app supports three location sources, selectable via `AppSettings.locationSou
 
 - **GDL90DebugView.swift**: Real-time GDL90 protocol diagnostics
   - Observes `GDL90Reader` only; it never starts or stops the listener (VirtualPAPIApp owns the lifecycle via the selected source). Shows a note when GDL90 is not the selected location source, since no data will arrive then
+  - Shows the device heartbeat's "GPS Position" (valid / not valid / no heartbeat), the ownship NIC (red "no valid position" below `GDL90Reader.minimumNIC`) and the track type (orange unless true track)
 - **InternalLocationDebugView.swift**: Everything CoreLocation reports for the internal GPS
   - Status (authorization, accuracy authorization, Location Services, tracking/updating/paused, accepted/rejected fix counts, last error), the last raw fix with whether the guidance accepted or rejected it and why (coordinate, horizontal accuracy, MSL and ellipsoidal altitude, vertical accuracy, speed and speed accuracy, course and course accuracy, floor, simulated-by-software / produced-by-accessory), compass heading (magnetic, true, accuracy, raw magnetic field) and the manager configuration
   - Negative (invalid) CoreLocation values are shown as "invalid (N)" in red; vertical accuracy above `poorVerticalAccuracy` is orange. A `TimelineView` refreshes the age rows every second
@@ -265,6 +266,9 @@ The GDL90 protocol is a standard aviation data link protocol used by many portab
   - 12-bit altitude with 25 ft resolution, -1000 ft offset
   - 12-bit velocity with 1 knot resolution (0xFFF = invalid)
   - 8-bit track with LSB = 360/256 = 1.40625 degrees
+  - Byte 12 low nibble ("misc"): its two low bits are the track type, decoded by `static func GDL90Reader.decodeTrackType(_:)` into `GDL90TrackType` (not valid / true track / magnetic heading / true heading). The raw track and its type are always published for the debug view, but `static func guidanceTrack(_:type:)` only passes the track to `GenericLocation` when it is a true track, otherwise nil (so the bearing arrow disappears, as for an invalid internal GPS course): relative bearing is computed against true bearings, so a magnetic heading would be off by the local variation, and a heading ignores wind drift
+  - Byte 13 upper nibble: NIC (Navigation Integrity Category), published as `nic`. Reports with NIC below `GDL90Reader.minimumNIC` (1) are published but not fed to `GenericLocation`: per the spec a device without a fix sends lat/lon 0 with NIC 0, which `isValidCoordinate` accepts and would otherwise put the aircraft at Null Island while looking fresh
+- Message ID 0 (Heartbeat): byte 1 bit 7 ("GPS Pos Valid") is published as `deviceGPSValid` (nil until a heartbeat arrives, reset by `stopListening()`); status only, shown in GDL90DebugView, it doesn't gate guidance
 - Message ID 11 (Ownship Geometric Altitude): 16-bit signed with 5 ft resolution
 
 **Altitude datum selection:**
