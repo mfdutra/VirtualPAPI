@@ -22,12 +22,6 @@ xcodebuild -scheme VirtualPAPI clean
 
 ### Running Tests
 ```bash
-# Run unit tests
-xcodebuild test -scheme VirtualPAPI -destination 'platform=iOS Simulator,name=iPhone 17'
-
-# Run specific test target
-xcodebuild test -scheme VirtualPAPI -only-testing:VirtualPAPITests -destination 'platform=iOS Simulator,name=iPhone 17'
-
 # Run UI tests
 xcodebuild test -scheme VirtualPAPI -only-testing:VirtualPAPIUITests -destination 'platform=iOS Simulator,name=iPhone 17'
 
