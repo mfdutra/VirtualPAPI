@@ -1,5 +1,5 @@
-# This workflow will build a Swift project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-swift
+# Builds the VirtualPAPI Xcode project and runs its unit tests on an iOS simulator.
+# This is an Xcode project (not a Swift package), so it uses xcodebuild, not `swift build`.
 
 name: Swift
 
@@ -12,11 +12,42 @@ on:
 jobs:
   build:
 
-    runs-on: macos-latest
+    # The deployment target is iOS 26, which needs the Xcode 26 / iOS 26 SDK
+    runs-on: macos-26
 
     steps:
     - uses: actions/checkout@v4
+
+    # Secrets.swift is gitignored; a placeholder lets the project compile.
+    # Only the remote database update uses it, which the tests don't exercise.
+    - name: Create placeholder Secrets.swift
+      run: |
+        cat > VirtualPAPI/Secrets.swift <<'EOF'
+        import Foundation
+
+        enum Secrets {
+            static let totpSecret = "CI-PLACEHOLDER"
+        }
+        EOF
+
+    - name: Select iOS simulator
+      run: |
+        UDID=$(xcrun simctl list devices available --json \
+          | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
+        echo "Using simulator $UDID"
+        echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+
     - name: Build
-      run: swift build -v
-    - name: Run tests
-      run: swift test -v
+      run: |
+        xcodebuild build-for-testing \
+          -scheme VirtualPAPI \
+          -destination "id=$SIMULATOR_UDID" \
+          CODE_SIGNING_ALLOWED=NO
+
+    - name: Run unit tests
+      run: |
+        xcodebuild test-without-building \
+          -scheme VirtualPAPI \
+          -only-testing:VirtualPAPITests \
+          -destination "id=$SIMULATOR_UDID" \
+          CODE_SIGNING_ALLOWED=NO

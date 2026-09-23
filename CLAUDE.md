@@ -31,6 +31,9 @@ xcodebuild test -scheme VirtualPAPI -only-testing:VirtualPAPITests -destination 
 
 When running on the Mac, the `Executed 0 tests` line only counts XCTest tests; Swift Testing reports its results on the `Test run with N tests ... passed` line. The `[AXLoading] ... ScreenTimeUI` errors, `#Spi, CLInternalGetPrecisionPermission failed` lines (logged when tests construct a `HighFrequencyLocationTracker`, whose `CLLocationManager` has no location permission on the Mac) and `appintentsmetadataprocessor` warnings are harmless macOS noise. This is much faster than the simulator (about 20 s vs several minutes), so prefer it for unit tests.
 
+### Continuous Integration
+`.github/workflows/swift.yml` runs on pushes and PRs to `main` on a `macos-26` runner, because the iOS 26 deployment target needs the Xcode 26 SDK. It's an Xcode project, not a Swift package, so it uses `xcodebuild` and not `swift build`. It writes a placeholder `VirtualPAPI/Secrets.swift`, since the real one is gitignored and only the remote database update uses it. It then picks the first available iPhone simulator, runs `build-for-testing` with `CODE_SIGNING_ALLOWED=NO`, and runs `test-without-building -only-testing:VirtualPAPITests`. UI tests aren't run in CI.
+
 ### Database Generation
 The `scripts/` directory contains aviation data from ourairports.com:
 ```bash
