@@ -5,6 +5,90 @@ All notable changes to VirtualPAPI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5] - 2026-09-23
+
+### Added
+
+#### Altitude Integrity
+- **GDL90 geometric altitude preferred**: The glidepath now uses Message 11 geometric altitude when one arrived within the last 3 seconds, and falls back to Message 10 pressure altitude (29.92 inHg) only when it has to. Pressure altitude can be hundreds of feet off MSL on a non-standard day
+- **Pressure altitude caution**: When GDL90 falls back to pressure altitude, an orange "⚠ PRESS ALT" caution appears under the DTG line and the glide slope diamond turns amber instead of magenta
+- **GPS altitude caution**: When internal GPS is the source and its vertical accuracy is worse than 15 m (about 0.45° at 1 NM on a 3° path), an orange "⚠ GPS ALT ±NN ft" caution appears under the DTG line. Guidance keeps working; the caution says the altitude behind it is uncertain
+
+#### Debug Views
+- **Internal GPS debug view**: New screen, linked from Settings, that shows everything CoreLocation reports: authorization and Location Services status, tracking/paused state, accepted and rejected fix counts, the last error (with the CLError code named), the last raw fix (including rejected fixes, with the reason), compass heading and the location manager's configuration
+- **GDL90 debug view**: Now shows the device heartbeat's "GPS Position" valid flag, the ownship NIC, the track type, the status of the outbound discovery heartbeat and the additional port 43211
+
+#### Developer Tools
+- **Continuous integration**: New GitHub Actions workflow builds the app and runs the unit tests on every push and pull request to `main`
+- **Unified logging**: All diagnostics now go through `os.Logger` (subsystem `com.mfdutra.VirtualPAPI`) instead of `print`, so they can be read from a user's device with Console.app
+- **`gen_sqlite.py` output option**: New `-o/--output` flag, plus a summary of every filter's counts at the end of the run
+
+#### Testing
+- **New test suites**: GDL90 wire-format parsing (framing, byte unstuffing, CRC, field decoding), XGPS parsing, GDL90 altitude selection, internal GPS validity and diagnostics, database validation, opening, restoring and row decoding, UDP receiver and listener lifecycle, local IP address lookup, and `AppSettings` migration
+
+### Changed
+
+#### Internal GPS
+- **Configured for aircraft use**: CoreLocation now uses the `.airborne` activity type and no longer pauses updates automatically. Before, updates could stop during a long hold short or run-up and never resume, which left the display stale on the take-off roll
+- **Runs only when selected**: The internal GPS now stops when X-Plane or GDL90 is the selected source, which saves battery. The location permission prompt now appears only once internal GPS is selected
+- **Continuous updates only**: Removed the redundant 2 Hz `requestLocation()` polling timer. Timers piled up on every authorization change and cancelled in-flight requests
+
+#### Airport Selection
+- **New search clears the selection**: Typing into the search field while an airport is selected now clears the selection, so the search results replace the runway list
+
+#### Aviation Database
+- **Every runway has an elevation and a heading**: `gen_sqlite.py` now skips runway ends with no elevation and runways whose two ends share identical coordinates. It also computes missing headings from the runway end coordinates, so the displaced threshold and aiming point are always applied
+- **Data refresh**: Regenerated from the latest OurAirports data (about 8,600 airports and 22,600 runways, down from 11,400 and 29,700 now that unusable runways are excluded)
+- **Safer generation**: `gen_sqlite.py` builds into a temporary file and moves it into place only after a successful build. It skips duplicate runway ends and airports with blank coordinates with a warning instead of aborting
+
+#### Privacy
+- **Local network permission**: Added the local network usage description that iOS requires for the UDP listeners and the GDL90 discovery broadcast
+- **Accurate privacy policy and README**: `PRIVACY.md` and the README now describe the app's actual network use: the GDL90 discovery broadcast on local Wi-Fi, the optional database update from virtualpapi.net, Google Maps from the destination button, and Apple Maps imagery in the Destination Map debug view
+
+### Fixed
+
+#### Guidance Reliability
+- **Guidance froze while scrolling**: The 1 Hz guidance update, the staleness check and the GDL90 heartbeat stopped firing while the favorites row was scrolled or a slider was dragged. They now keep running
+- **Invalid internal GPS fixes**: Fixes that CoreLocation marks as having an invalid coordinate or altitude are now dropped. Before, an invalid altitude (reported as 0 ft) pegged the diamond at "fly up" and turned the PAPI all red while the location looked fresh. Fixes simulated by software, such as in the Simulator, are still accepted
+- **GPS didn't start after granting permission**: On first launch, granting location permission might not start updates until the app was relaunched
+- **GDL90 fix without a position**: Ownship reports with NIC 0 (a device with no fix sends lat/lon 0) are no longer treated as a fresh position at 0° N, 0° E, so the location goes stale instead
+- **GDL90 track type**: Only a true track now drives the bearing arrow. A magnetic or true heading would have been off by the local variation or wind drift
+- **GDL90 invalid altitude**: The Message 10 "no altitude" value (0xFFF) was decoded as 101,375 ft and fed into the glidepath. It's now treated as unavailable
+- **Non-finite and out-of-range data**: XGPS and GDL90 values that are NaN, infinite or out of range are now rejected. A NaN could otherwise lock the indicator at full scale until the smoothing was reset
+
+#### Crashes
+- **Malformed X-Plane packets**: An XGPS packet with too few fields crashed the app. Packets with missing or non-numeric fields are now dropped
+- **Clearing the airport selection**: Clearing the selection could crash when the aiming point change arrived after the runway had already been cleared
+- **Settings screen**: Reading the local IP address could crash on a network interface with no assigned address
+- **NULL database values**: A NULL airport name or runway identifier in a downloaded database would crash. Such rows are now handled
+- **Early X-Plane packet**: A packet processed before the settings were wired up would crash
+
+#### Location Sources
+- **Empty UDP datagram ended the feed**: A zero-length datagram or an interrupted system call stopped the X-Plane or GDL90 feed while it still appeared connected
+- **Clean listener shutdown**: The UDP receive threads are now woken and stopped before their sockets close. Before, a stopped thread could be left waiting on a socket descriptor that the system later reused
+- **GDL90 debug view**: Opening the view no longer starts a second listener, and closing it no longer stops the GDL90 feed
+
+#### Aviation Database
+- **Remote updates are validated**: A downloaded database is now checked (SQLite format, integrity, schema and minimum airport and runway counts) before it's installed, and the previous database is kept as a backup. Before, a captive-portal page or truncated download would replace the live database for good
+- **Stale "up-to-date" after an app update**: When the bundled database replaces the downloaded one, the stored download version is cleared, so the next update check really downloads
+- **Corrupt or missing database recovery**: The database is now opened read-only, a broken file is replaced by the bundled copy at launch, and any remaining failure is shown in Settings. Before, a failed copy could leave an empty database that was never replaced
+- **Thread safety**: All database access is serialized, so queries during a remote update wait instead of hitting a closed connection
+
+#### Settings
+- **Favorites**: `AirportSelection` is now the only owner of saved favorites. A second, unused copy in `AppSettings` could have overwritten them
+
+### Technical Details
+
+#### Removed
+- Unused private `_LocationEssentials` import (fragile across SDKs and flagged by App Review) and unused SwiftData imports
+- Dead `AppSettings.useXPlane` property. The legacy setting is still migrated on first launch
+
+#### Build
+- **Warning-free**: The app and test targets build with no warnings. Code that uses iOS 27 SDK-only API is guarded so CI can still build with Xcode 26
+- **SQLite binding**: Text parameters are now bound with `SQLITE_TRANSIENT`, so SQLite copies them instead of relying on a temporary buffer
+
+---
+
 ## [1.4] - 2026-09-15
 
 ### Added
