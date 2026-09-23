@@ -317,7 +317,11 @@ struct InternalLocationDebugView: View {
         case .fitness: "Fitness"
         case .otherNavigation: "Other Navigation"
         case .airborne: "Airborne"
+        // .maritime is new in the iOS 27 SDK (Xcode 27, Swift 6.4); CI still
+        // builds with Xcode 26, where it falls under @unknown default
+        #if compiler(>=6.4)
         case .maritime: "Maritime"
+        #endif
         @unknown default: "Unknown (\(activityType.rawValue))"
         }
     }
